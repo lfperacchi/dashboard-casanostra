@@ -19,12 +19,13 @@
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
         const ABA_ALVO = "Dashboard_Indicadores IPCA";
 
-        // --- LISTA DE ACESSO AUTORIZADO ---
+        // --- LISTA DE ACESSO AUTORIZADO (ATUALIZADA) ---
         const EMAILS_AUTORIZADOS = [
             'lfperacchi@gmail.com',
             'lfperacchi.investidor@gmail.com',
             'miforalozzo@gmail.com',
-            'mepagliosa11@gmail.com'
+            'mepagliosa11@gmail.com',
+            'sabrinapagliosaarquitetura@gmail.com'
         ];
 
         let tokenClient;
@@ -45,7 +46,6 @@
                 callback: async (resp) => {
                     if (resp.error) return;
                     
-                    // VERIFICAÇÃO DE SEGURANÇA POR E-MAIL
                     const isAuthorized = await verificarAcesso(resp.access_token);
                     if (!isAuthorized) return;
 
@@ -63,10 +63,9 @@
                 const userData = await resp.json();
                 
                 if (EMAILS_AUTORIZADOS.includes(userData.email.toLowerCase())) {
-                    console.log("Acesso garantido: " + userData.email);
                     return true;
                 } else {
-                    alert("ACESSO NEGADO: O e-mail " + userData.email + " não tem permissão para acessar este dashboard.");
+                    alert("ACESSO NEGADO: O e-mail " + userData.email + " não tem permissão.");
                     window.location.reload(); 
                     return false;
                 }
@@ -115,7 +114,6 @@
                 processDashboard(workbook.Sheets[ABA_ALVO]);
                 document.getElementById('file-status').innerText = "Conectado: " + (currentFileName || "Planilha");
             } catch (err) {
-                alert("Sessão expirada ou erro de conexão. Reconectando...");
                 handleAuthClick();
             }
         }
