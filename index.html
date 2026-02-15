@@ -93,6 +93,7 @@
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #000; color: white; border-radius: 50%; font-size: 11px; cursor: help; margin-left: 8px; font-weight: bold; font-style: italic; vertical-align: middle; }
         .chart-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
+        .indicator-label { cursor: help; border-bottom: 1px dotted #ccc; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -102,11 +103,7 @@
             <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto">
                 <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-8 font-bold text-xs uppercase text-left tracking-widest">✕ Fechar</button>
                 <div class="group relative mb-8">
-                    <h2 class="text-2xl font-black uppercase italic text-casa-red leading-tight flex items-center">
-                        <span id="modalTitle">Indicador</span>
-                        <span id="modalInfoIcon" class="info-icon hidden">i</span>
-                    </h2>
-                    <div id="modalMetodologia" class="absolute z-20 top-full left-0 mt-2 w-full bg-black text-white p-4 rounded-xl text-[11px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-2xl italic border border-gray-700 leading-relaxed"></div>
+                    <h2 class="text-2xl font-black uppercase italic text-casa-red leading-tight flex items-center" id="modalTitle">Indicador</h2>
                 </div>
                 <div class="space-y-6 flex-grow">
                     <div class="p-5 bg-white rounded-2xl shadow-sm border border-gray-100 h-32 flex flex-col justify-center">
@@ -131,14 +128,12 @@
             <h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-casa-red">INTEL</span></h1>
         </div>
         <div class="flex gap-3">
-            <button onclick="gerarPDF()" class="bg-white text-black px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📥 PDF</button>
             <button onclick="handleAuthClick()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">🔄 ATUALIZAR</button>
             <button onclick="handleAuthClick(true)" class="bg-casa-red text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📂 TROCAR</button>
         </div>
     </nav>
 
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto">
-        
         <div id="cards-sections-container"></div>
 
         <div class="border-t border-gray-200 pt-16 mt-16 space-y-8">
@@ -175,7 +170,7 @@
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">7. Eficiência: Giro e Prazos (Eixo Duplo)</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">7. Eficiência: PMRE e Giro de Estoque</div>
                     <div class="h-72"><canvas id="chart_estoque_giro"></canvas></div>
                 </div>
 
@@ -185,7 +180,7 @@
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">9. Investimentos (Capex) e Depreciação</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">9. Capex e Depreciação (k)</div>
                     <div class="h-72"><canvas id="chart_capex"></canvas></div>
                 </div>
 
@@ -200,8 +195,8 @@
             margens: { title: "3. Margens", tags: ['margem ebit', 'margem líquida', 'margem ebitda'], div: 1, scale: '%' },
             opex_a: { title: "4. Pessoal e Impostos", tags: ['despesas operacionais', 'impostos totais', 'gasto com pessoal'], div: 1000, scale: 'k' },
             opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
-            estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k' },
-            estoque_giro: { title: "7. Giro e PMRE", tags: ['giro de renovação', 'pmre'], div: 1, scale: '', dualAxis: true },
+            estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k', exclude: ['pmre', 'giro'] },
+            estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true },
             produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
             capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
@@ -226,7 +221,6 @@
                 masterData[labelLow] = { original: labelRaw, v24: Number(row[10]) || 0, v25: Number(row[11]) || 0, commB };
             });
 
-            // Criar Seções de Cards Sincronizadas
             Object.keys(GRUPOS).forEach(key => {
                 const config = GRUPOS[key];
                 const sectionDiv = document.createElement('div');
@@ -242,7 +236,7 @@
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44";
                         card.onclick = () => openModal(item.original, item.v24, item.v25, item.commB, varPct);
-                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest" title="${item.commB}">${item.original}</p><span class="text-3xl font-black block mt-2">${formatVal(item.v25, mKey.includes('margem'))}</span></div><div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(item.v24, mKey.includes('margem'))}</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest indicator-label" title="${item.commB}">${item.original}</p><span class="text-3xl font-black block mt-2">${formatVal(item.v25, mKey.includes('margem'))}</span></div><div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(item.v24, mKey.includes('margem'))}</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
                         grid.appendChild(card);
                     }
                 });
@@ -253,41 +247,54 @@
 
         function renderThematicChart(key, data) {
             const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [];
-            Object.keys(data).forEach(dKey => {
-                const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
-                if (!ex && config.tags.some(t => dKey.includes(t))) {
-                    const item = data[dKey]; labels.push(item.original);
-                    d24.push(key === 'margens' ? (item.v24 < 1 ? item.v24 * 100 : item.v24) : item.v24 / config.div);
-                    d25.push(key === 'margens' ? (item.v25 < 1 ? item.v25 * 100 : item.v25) : item.v25 / config.div);
-                }
+            
+            config.tags.forEach(tag => {
+                Object.keys(data).forEach(dKey => {
+                    const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
+                    if (!ex && dKey.includes(tag)) {
+                        const item = data[dKey];
+                        labels.push(item.original);
+                        d24.push(key === 'margens' ? (item.v24 < 1 ? item.v24 * 100 : item.v24) : item.v24 / config.div);
+                        d25.push(key === 'margens' ? (item.v25 < 1 ? item.v25 * 100 : item.v25) : item.v25 / config.div);
+                    }
+                });
             });
 
             if (!labels.length) return;
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             if (charts[key]) charts[key].destroy();
 
-            // Lógica de Eixo Duplo para Giro vs PMRE
             const isDual = config.dualAxis;
             charts[key] = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [
-                        { label: '2024', data: d24, backgroundColor: '#000', borderRadius: 5, yAxisID: isDual ? 'y' : 'y' },
-                        { label: '2025', data: d25, backgroundColor: '#BE1E2D', borderRadius: 5, yAxisID: isDual ? 'y' : 'y' }
+                        { label: '2024', data: d24, backgroundColor: '#000', borderRadius: 5, yAxisID: 'y' },
+                        { label: '2025', data: d25, backgroundColor: '#BE1E2D', borderRadius: 5, yAxisID: 'y' }
                     ]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     scales: {
-                        y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } },
-                        y1: isDual ? { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#BE1E2D' }, title: { display: true, text: 'Giro de Renovação' } } : { display: false }
+                        y: { 
+                            position: 'left', 
+                            title: { display: true, text: isDual ? 'Dias (PMRE)' : '' },
+                            min: 0,
+                            max: isDual ? 360 : undefined,
+                            ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } 
+                        },
+                        y1: isDual ? { 
+                            position: 'right', 
+                            grid: { drawOnChartArea: false }, 
+                            title: { display: true, text: 'Vezes (Giro)', color: '#BE1E2D' },
+                            beginAtZero: true
+                        } : { display: false }
                     }
                 }
             });
 
-            // Ajuste manual de escalas para o Giro no Eixo Duplo se houver PMRE
-            if (isDual && labels.some(l => l.toLowerCase().includes('giro'))) {
+            if (isDual) {
                 charts[key].data.datasets.forEach(ds => {
                     ds.yAxisID = (ctx) => charts[key].data.labels[ctx.index].toLowerCase().includes('giro') ? 'y1' : 'y';
                 });
@@ -299,9 +306,6 @@
             document.getElementById('modalTitle').innerText = label;
             document.getElementById('modalV24').innerText = formatVal(v24, label.toLowerCase().includes('margem'));
             document.getElementById('modalV25').innerText = formatVal(v25, label.toLowerCase().includes('margem'));
-            const met = document.getElementById('modalMetodologia');
-            if (cb) { met.innerText = cb; met.classList.remove('hidden'); document.getElementById('modalInfoIcon').classList.remove('hidden'); }
-            else { met.classList.add('hidden'); document.getElementById('modalInfoIcon').classList.add('hidden'); }
             document.getElementById('detailsModal').style.display = 'flex';
             setTimeout(() => {
                 const ctx = document.getElementById('modalChartCanvas').getContext('2d');
@@ -311,7 +315,6 @@
         }
 
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
-        function gerarPDF() { html2pdf().from(document.getElementById('dashboard-content')).set({ margin: 10, filename: 'Casa_Nostra_Intel.pdf', jsPDF: { orientation: 'landscape' } }).save(); }
     </script>
 </body>
 </html>
