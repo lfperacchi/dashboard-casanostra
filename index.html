@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-pt">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intel | v1.0.8</title>
+    <title>Casa Nostra Intel | v1.0.9</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,9 +13,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.0.8";
-        const CLIENT_ID = 'INSIRA_SEU_CLIENT_ID';
-        const API_KEY = 'INSIRA_SUA_API_KEY';
+        const VERSION = "1.0.9";
+        const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
+        const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
         const ABA_ALVO = "Dashboard_Indicadores IPCA";
 
@@ -44,7 +44,8 @@
         async function verificarAcesso(at) {
             const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${at}` } });
             const user = await resp.json();
-            return EMAILS_AUTORIZADOS.includes(user.email.toLowerCase());
+            if (EMAILS_AUTORIZADOS.includes(user.email.toLowerCase())) return true;
+            alert("Acesso Negado."); return false;
         }
         function handleAuthClick(f = false) {
             if (f) { currentFileId = null; localStorage.removeItem('casaNostra_lastFileId'); }
@@ -66,7 +67,6 @@
             const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&t=${Date.now()}`, { headers: { 'Authorization': `Bearer ${token.access_token}` } });
             const wb = XLSX.read(new Uint8Array(await resp.arrayBuffer()), {type: 'array', cellComments: true});
             processDashboard(wb.Sheets[ABA_ALVO]);
-            document.getElementById('file-status').innerText = "Conectado";
         }
 
         const GRUPOS = {
@@ -88,8 +88,8 @@
 
         function formatVal(v, isP) {
             let n = Number(v) || 0;
-            if (isP) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-PT', { minimumFractionDigits: 2 }) + '%';
-            return n.toLocaleString('pt-PT');
+            if (isP) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%';
+            return n.toLocaleString('pt-BR');
         }
 
         function processDashboard(sheet) {
@@ -112,7 +112,7 @@
             Object.keys(GRUPOS).forEach(key => {
                 const config = GRUPOS[key];
                 const section = document.createElement('div');
-                section.innerHTML = `<div class="section-header">${config.title}</div><div id="grid-${key}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>`;
+                section.innerHTML = `<div class="section-header">${config.title}</div><div id="grid-${key}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"></div>`;
                 container.appendChild(section);
 
                 const chartCard = document.createElement('div');
@@ -120,11 +120,11 @@
                 chartCard.innerHTML = `<div class="font-black text-black text-lg uppercase mb-4">${config.title}</div><div class="h-80"><canvas id="chart_${key}"></canvas></div>`;
                 chartsGrid.appendChild(chartCard);
 
-                const usedInBlock = new Set();
+                const used = new Set();
                 Object.keys(masterData).forEach(mKey => {
                     const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
-                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !usedInBlock.has(mKey)) {
-                        usedInBlock.add(mKey); const it = masterData[mKey];
+                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
+                        used.add(mKey); const it = masterData[mKey];
                         const varPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44 hover:shadow-md transition-all";
@@ -138,6 +138,7 @@
                 });
                 renderThematicChart(key, masterData);
             });
+            document.getElementById('file-status').innerText = "Dashboard Carregado";
         }
 
         function renderThematicChart(key, data) {
@@ -159,123 +160,118 @@
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             charts[key] = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: config.dualAxis ? ['Gestão de Stocks'] : labels, datasets: config.dualAxis ? [
+                data: { labels: config.dualAxis ? ['Eficiência'] : labels, datasets: config.dualAxis ? [
                     { label: 'PMRE 2024', data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
                     { label: 'Giro 2024', data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 2025', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
                 ] : [{ label: '2024', data: d24, backgroundColor: '#000', info: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-PT') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
+                options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info ? '\nDefinição: ' + ctx[0].dataset.info[ctx[0].dataIndex] : '' } } }, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
             });
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ GERANDO RELATÓRIO..."; btn.disabled = true;
-            const printContent = document.createElement('div');
-            printContent.style.padding = '8mm'; printContent.style.width = '277mm';
-            
-            printContent.innerHTML = `<div style="display:flex; justify-content:space-between; border-bottom:5px solid #BE1E2D; padding-bottom:10px; margin-bottom:30px;">
-                <h1 style="font-size:22px; font-weight:900;">RELATÓRIO CASA NOSTRA INTEL</h1>
-                <span style="font-size:10px; color:#999; font-weight:bold;">v${VERSION}</span></div>`;
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ GERANDO PDF..."; btn.disabled = true;
+            const printArea = document.createElement('div');
+            printArea.style.width = '277mm'; printArea.style.padding = '5mm';
+            printArea.innerHTML = `<div style="display:flex; justify-content:space-between; border-bottom:4px solid #BE1E2D; padding-bottom:10px; margin-bottom:20px;">
+                <h1 style="font-size:22px; font-weight:900;">RELATÓRIO CASA NOSTRA INTEL</h1><span style="font-size:9px; color:#999; font-weight:bold;">Modelo v${VERSION}</span></div>`;
 
-            // 1. KPIs (Boxes)
+            // 1. Tabelas de Boxes Primeiro
             for (const key of Object.keys(GRUPOS)) {
                 const config = GRUPOS[key];
                 const section = document.createElement('div');
-                section.style.pageBreakInside = 'avoid';
-                section.style.marginBottom = '30px';
-                
+                section.style.pageBreakInside = 'avoid'; section.style.marginBottom = '20px';
                 let html = `<h2 style="font-size:12px; font-weight:800; text-transform:uppercase; border-left:4px solid #BE1E2D; padding-left:10px; margin-bottom:10px; background:#f9f9f9;">${config.title}</h2>
-                            <table style="width:100%; border-collapse:collapse; margin-bottom:10px;">
-                            <thead style="background:#000; color:#fff; font-size:8px;"><tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">REAL 2024</th><th style="padding:6px;">REAL 2025</th><th style="padding:6px; text-align:left;">OBSERVAÇÕES (K/L)</th></tr></thead><tbody>`;
-
+                            <table style="width:100%; border-collapse:collapse; margin-bottom:10px; font-size:9px;">
+                            <thead style="background:#000; color:#fff; font-size:8px;"><tr><th style="padding:5px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:5px;">2024</th><th style="padding:5px;">2025</th><th style="padding:5px; text-align:left;">NOTAS (K/L)</th></tr></thead><tbody>`;
                 const used = new Set();
                 Object.keys(masterData).forEach(mKey => {
                     const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
                     if (!isEx && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
                         const vPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
-                        html += `<tr style="border-bottom:1px solid #eee; font-size:9px;">
-                            <td style="padding:8px; width:35%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666;">${it.commB}</span></td>
-                            <td style="padding:8px; text-align:center;">${formatVal(it.v24, isP)}</td>
-                            <td style="padding:8px; text-align:center; background:#fffcfc;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:8px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                            <td style="padding:8px; font-size:8px; color:#555; line-height:1.2;">${it.commK ? '<strong>24:</strong> '+it.commK : ''}${it.commL ? '<br><strong>25:</strong> '+it.commL : ''}</td></tr>`;
+                        html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:6px; width:35%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#777;">${it.commB}</span></td>
+                            <td style="padding:6px; text-align:center;">${formatVal(it.v24, isP)}</td>
+                            <td style="padding:6px; text-align:center; background:#fffcfc;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:8px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
+                            <td style="padding:6px; font-size:8px; color:#666;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
                     }
                 });
                 html += `</tbody></table>`;
-                section.innerHTML = html;
-                printContent.appendChild(section);
+                section.innerHTML = html; printArea.appendChild(section);
             }
 
-            // 2. Gráficos (Garantindo os 9)
+            // 2. Análise Gráfica (Página Nova)
             const gHeader = document.createElement('div');
             gHeader.style.pageBreakBefore = 'always';
-            gHeader.innerHTML = `<h2 style="font-size:18px; font-weight:900; margin-bottom:30px; border-bottom:2px solid #000;">ANÁLISE GRÁFICA COMPARATIVA</h2>`;
-            printContent.appendChild(gHeader);
+            gHeader.innerHTML = `<h2 style="font-size:18px; font-weight:900; margin-bottom:20px; border-bottom:2px solid #000;">ANÁLISE GRÁFICA</h2>`;
+            printArea.appendChild(gHeader);
 
             for (const key of Object.keys(GRUPOS)) {
                 const config = GRUPOS[key];
                 const chartImg = charts[key].toBase64Image();
                 const div = document.createElement('div');
-                div.style.pageBreakInside = 'avoid';
-                div.style.marginBottom = '50px';
-                
+                div.style.pageBreakInside = 'avoid'; div.style.marginBottom = '40px';
                 let resTable = `<table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:9px; text-align:center;">
-                    <tr style="background:#eee; font-weight:bold;"><td>Indicador</td><td>2024</td><td>2025</td><td>Var. %</td><td>Metodologia (Coluna B)</td></tr>`;
-                
-                const usedRes = new Set();
+                    <tr style="background:#eee; font-weight:bold;"><td>Indicador</td><td>2024</td><td>2025</td><td>Var.%</td></tr>`;
+                const usedR = new Set();
                 Object.keys(masterData).forEach(mKey => {
-                    const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
-                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !usedRes.has(mKey)) {
-                        usedRes.add(mKey); const it = masterData[mKey];
-                        const vP = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
-                        resTable += `<tr style="border-bottom:1px solid #eee;"><td style="text-align:left; font-weight:bold; padding:5px;">${it.original}</td><td>${formatVal(it.v24, mKey.includes('margem'))}</td><td>${formatVal(it.v25, mKey.includes('margem'))}</td><td style="color:${vP>=0?'#16a34a':'#BE1E2D'}">${vP>0?'+':''}${vP.toFixed(1)}%</td><td style="text-align:left; font-size:7px; color:#666;">${it.commB}</td></tr>`;
+                    if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !usedR.has(mKey)) {
+                        usedR.add(mKey); const it = masterData[mKey]; const vP = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
+                        resTable += `<tr><td style="text-align:left; font-weight:bold; padding:4px;">${it.original}</td><td>${formatVal(it.v24, mKey.includes('margem'))}</td><td>${formatVal(it.v25, mKey.includes('margem'))}</td><td style="color:${vP>=0?'#16a34a':'#BE1E2D'}">${vP>0?'+':''}${vP.toFixed(1)}%</td></tr>`;
                     }
                 });
                 resTable += `</table>`;
-
-                div.innerHTML = `<h3 style="font-size:14px; font-weight:800; text-transform:uppercase; margin-bottom:15px;">${config.title}</h3>
-                    <img src="${chartImg}" style="width:100%; border:1px solid #f0f0f0; border-radius:12px; margin-bottom:10px;">
-                    ${resTable}`;
-                printContent.appendChild(div);
-                await new Promise(r => setTimeout(r, 250)); // Delay para estabilidade
+                div.innerHTML = `<h3 style="font-size:13px; font-weight:800; text-transform:uppercase; margin-bottom:5px;">${config.title}</h3>
+                    <img src="${chartImg}" style="width:100%; border:1px solid #eee; border-radius:10px;">${resTable}`;
+                printArea.appendChild(div);
+                await new Promise(r => setTimeout(r, 200));
             }
 
-            const opt = { margin:0, filename:`Relatorio_CasaNostra_v${VERSION}.pdf`, html2canvas:{scale:2, useCORS:true}, jsPDF:{format:'a4', orientation:'landscape'} };
-            html2pdf().set(opt).from(printContent).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
+            html2pdf().set({ margin:0, filename:`Relatorio_CasaNostra_v${VERSION}.pdf`, html2canvas:{scale:2}, jsPDF:{format:'a4', orientation:'landscape'} }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
         function openModal(l, v24, v25, cb, ck, cl, varPct) {
             document.getElementById('modalTitle').innerText = l;
             document.getElementById('modalV24').innerText = formatVal(v24, l.toLowerCase().includes('margem'));
             document.getElementById('modalV25').innerText = formatVal(v25, l.toLowerCase().includes('margem'));
-            document.getElementById('modalDescB').innerText = cb || "Definição não cadastrada.";
-            document.getElementById('modalNoteK').innerText = ck ? "Nota 2024: " + ck : "";
-            document.getElementById('modalNoteL').innerText = cl ? "Nota 2025: " + cl : "";
+            document.getElementById('modalDescB').innerText = cb || "Sem definição.";
+            document.getElementById('modalNoteK').innerText = ck ? "2024: " + ck : "";
+            document.getElementById('modalNoteL').innerText = cl ? "2025: " + cl : "";
             document.getElementById('detailsModal').style.display = 'flex';
-            setTimeout(() => {
-                const ctx = document.getElementById('modalChartCanvas').getContext('2d');
-                if (modalChart) modalChart.destroy();
-                modalChart = new Chart(ctx, { type: 'bar', data: { labels: ['2024', '2025'], datasets: [{ label: l, data: [l.toLowerCase().includes('margem') ? v24*100 : v24, l.toLowerCase().includes('margem') ? v25*100 : v25], backgroundColor: ['#000', '#BE1E2D'], borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false } });
-            }, 100);
+            const ctx = document.getElementById('modalChartCanvas').getContext('2d');
+            if (modalChart) modalChart.destroy();
+            modalChart = new Chart(ctx, { type: 'bar', data: { labels: ['2024', '2025'], datasets: [{ label: l, data: [l.toLowerCase().includes('margem') ? v24*100 : v24, l.toLowerCase().includes('margem') ? v25*100 : v25], backgroundColor: ['#000', '#BE1E2D'], borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false } });
         }
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
     </script>
-    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 
     <style>
-        .bg-casa-red { background-color: #BE1E2D; }
-        .text-casa-red { color: #BE1E2D; }
-        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); }
-        .chart-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); }
+        .chart-card { background: white; border-radius: 2rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: all 0.3s; }
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
-        .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
+        .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #000; color: white; border-radius: 50%; font-size: 9px; cursor: help; margin-left: 6px; font-weight: bold; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
-    <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-casa-red sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-12 w-auto"><div><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-casa-red">INTEL</span></h1><span class="text-[9px] bg-gray-800 px-2 py-0.5 rounded text-gray-400 uppercase tracking-widest">Modelo v1.0.8</span></div></div>
-        <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-[10px] font-black">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-casa-red text-white px-5 py-2 rounded-full text-[10px] font-black">📂 TROCAR</button></div>
+    <div id="detailsModal" class="modal items-center justify-center p-4">
+        <div class="bg-white rounded-[2rem] shadow-2xl max-w-5xl w-full flex flex-col md:flex-row h-[80vh] overflow-hidden">
+            <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto">
+                <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-6 font-bold text-xs uppercase text-left tracking-widest">✕ Fechar</button>
+                <h2 class="text-2xl font-black uppercase italic text-[#BE1E2D] mb-4" id="modalTitle"></h2>
+                <p id="modalDescB" class="text-[11px] text-gray-500 italic mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
+                <div class="space-y-4">
+                    <div class="p-5 bg-white rounded-2xl border border-gray-100"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Realizado 2024</span><p id="modalV24" class="text-xl font-black mt-1"></p><div id="modalNoteK" class="text-[10px] text-gray-500 mt-2 border-t pt-2"></div></div>
+                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D]"><span class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest">Realizado 2025</span><p id="modalV25" class="text-xl font-black mt-1"></p><div id="modalNoteL" class="text-[10px] text-gray-500 mt-2 border-t pt-2"></div></div>
+                </div>
+            </div>
+            <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center"><canvas id="modalChartCanvas"></canvas></div>
+        </div>
+    </div>
+    <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-10"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INTEL</span> <span class="text-[9px] text-gray-500 ml-2 italic">v1.0.9</span></h1></div>
+        <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black">📂 TROCAR</button></div>
     </nav>
-    <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase">Conectando...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
+    <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 </body>
 </html>
