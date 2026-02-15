@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Dashboard Casa Nostra | Business Intelligence</title>
+    <title>Casa Nostra Intel | Business Intelligence</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -92,7 +92,7 @@
         .card-kpi:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(190, 30, 45, 0.2); transition: all 0.3s; }
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #000; color: white; border-radius: 50%; font-size: 11px; cursor: help; margin-left: 8px; font-weight: bold; font-style: italic; vertical-align: middle; }
         .chart-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .indicator-label { cursor: help; border-bottom: 1px dotted #ccc; }
+        .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -118,9 +118,6 @@
                         <p id="modalV25" class="text-2xl font-black mt-1">0</p>
                     </div>
                 </div>
-                <div id="modalVarBox" class="mt-8 p-6 rounded-2xl text-center shadow-sm">
-                    <span id="modalVarValue" class="text-4xl font-black tracking-tighter">0%</span>
-                </div>
             </div>
             <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center relative">
                 <canvas id="modalChartCanvas"></canvas>
@@ -131,28 +128,24 @@
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-casa-red sticky top-0 z-40 h-20 px-6">
         <div class="flex items-center gap-6 h-full">
             <img src="logo.png" alt="Logo" class="h-full w-auto object-contain py-1">
-            <div>
-                <h1 class="text-lg font-black uppercase tracking-tight leading-none">CASA NOSTRA <span class="text-casa-red">INTEL</span></h1>
-                <span id="file-status" class="text-[10px] text-gray-400 uppercase tracking-widest leading-none">Conectando...</span>
-            </div>
+            <h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-casa-red">INTEL</span></h1>
         </div>
         <div class="flex gap-3">
-            <button onclick="gerarPDF()" class="bg-white text-black hover:bg-gray-100 px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📥 PDF</button>
-            <button onclick="handleAuthClick()" class="bg-gray-800 text-white hover:bg-gray-700 px-5 py-2 rounded-full text-[10px] font-black shadow-lg">🔄 ATUALIZAR</button>
-            <button onclick="handleAuthClick(true)" class="bg-casa-red hover:bg-red-700 px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📂 TROCAR</button>
+            <button onclick="gerarPDF()" class="bg-white text-black px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📥 PDF</button>
+            <button onclick="handleAuthClick()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">🔄 ATUALIZAR</button>
+            <button onclick="handleAuthClick(true)" class="bg-casa-red text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📂 TROCAR</button>
         </div>
     </nav>
 
-    <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto space-y-12">
-        <div id="kpi-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+    <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto">
+        
+        <div id="cards-sections-container"></div>
 
-        <div class="border-t border-gray-200 pt-12 space-y-8">
-            <h3 class="text-center font-black text-gray-400 uppercase text-xs tracking-[0.4em] mb-12">Análise de Performance Casa Nostra</h3>
-            
+        <div class="border-t border-gray-200 pt-16 mt-16 space-y-8">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
                 <div class="chart-card lg:col-span-2">
-                    <div class="font-black text-casa-red text-xl uppercase tracking-tight">1. Receitas e Resultados Brutos (M)</div>
+                    <div class="font-black text-casa-red text-xl uppercase tracking-tight">1. Receitas de Vendas (M)</div>
                     <div class="h-80"><canvas id="chart_receitas"></canvas></div>
                 </div>
 
@@ -162,17 +155,17 @@
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">3. Eficiência e Margens (%)</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">3. Margens de Eficiência (%)</div>
                     <div class="h-72"><canvas id="chart_margens"></canvas></div>
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">4. OPEX A - Maiores Contas (k)</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">4. OPEX: Pessoal e Impostos (k)</div>
                     <div class="h-72"><canvas id="chart_opex_a"></canvas></div>
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">5. OPEX B - Gestão Administrativa (k)</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">5. OPEX: Gestão Administrativa (k)</div>
                     <div class="h-72"><canvas id="chart_opex_b"></canvas></div>
                 </div>
 
@@ -182,8 +175,18 @@
                 </div>
 
                 <div class="chart-card">
-                    <div class="font-black text-black text-lg uppercase tracking-tight">7. Eficiência: Giro e Prazos</div>
+                    <div class="font-black text-black text-lg uppercase tracking-tight">7. Eficiência: Giro e Prazos (Eixo Duplo)</div>
                     <div class="h-72"><canvas id="chart_estoque_giro"></canvas></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="font-black text-black text-lg uppercase tracking-tight">8. Performance e Produtividade</div>
+                    <div class="h-72"><canvas id="chart_produtividade"></canvas></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="font-black text-black text-lg uppercase tracking-tight">9. Investimentos (Capex) e Depreciação</div>
+                    <div class="h-72"><canvas id="chart_capex"></canvas></div>
                 </div>
 
             </div>
@@ -192,75 +195,104 @@
 
     <script>
         const GRUPOS = {
-            receitas: { tags: ['receita bruta', 'receita líquida', 'cpv', 'lucro bruto'], scale: 'M', div: 1000000 },
-            lucratividade: { tags: ['lucro operacional', 'ebit', 'ebitda', 'lucro líquido', 'lucro nominal', 'resultado operacional'], exclude: ['margem'], scale: 'k', div: 1000 },
-            margens: { tags: ['margem ebit', 'margem líquida', 'margem ebitda'], scale: '%', div: 1 },
-            // OPEX SPLIT
-            opex_a: { tags: ['despesas operacionais', 'impostos totais', 'gasto com pessoal'], scale: 'k', div: 1000 },
-            opex_b: { tags: ['administrativo', 'publicidade', 'frota'], scale: 'k', div: 1000 },
-            // ESTOQUE SPLIT
-            estoque_fin: { tags: ['aquisição de produtos', 'cpv', 'estoque (valor)'], scale: 'k', div: 1000 },
-            estoque_giro: { tags: ['giro de renovação', 'pmre'], scale: '', div: 1 }
+            receitas: { title: "1. Receitas", tags: ['receita bruta', 'receita líquida'], div: 1000000, scale: 'M' },
+            lucratividade: { title: "2. Lucratividade", tags: ['lucro operacional', 'ebit', 'ebitda', 'lucro líquido', 'lucro nominal', 'resultado operacional', 'lucro bruto'], exclude: ['margem'], div: 1000, scale: 'k' },
+            margens: { title: "3. Margens", tags: ['margem ebit', 'margem líquida', 'margem ebitda'], div: 1, scale: '%' },
+            opex_a: { title: "4. Pessoal e Impostos", tags: ['despesas operacionais', 'impostos totais', 'gasto com pessoal'], div: 1000, scale: 'k' },
+            opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
+            estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k' },
+            estoque_giro: { title: "7. Giro e PMRE", tags: ['giro de renovação', 'pmre'], div: 1, scale: '', dualAxis: true },
+            produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
+            capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
 
-        function cleanComment(text) { return text ? text.split('\n').filter(l => !l.includes('ID#') && !l.match(/\d{4}/)).join(' ').trim() : ""; }
-        function getComment(sheet, row, col) { const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})]; return cell?.c?.[0]?.t ? cleanComment(cell.c[0].t) : ""; }
-
         function formatVal(val, isPercent) {
-            let num = Number(val) || 0;
-            if (isPercent) return (num < 1 && num !== 0 ? num * 100 : num).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%';
-            return num.toLocaleString('pt-BR');
+            let n = Number(val) || 0;
+            if (isPercent) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%';
+            return n.toLocaleString('pt-BR');
         }
 
         function processDashboard(sheet) {
-            const container = document.getElementById('kpi-container'); container.innerHTML = '';
             const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
             const masterData = {};
+            const cardsContainer = document.getElementById('cards-sections-container');
+            cardsContainer.innerHTML = '';
 
-            rows.forEach((row, index) => {
-                if (index === 0 || !row[1]) return;
+            rows.forEach((row, idx) => {
+                if (idx === 0 || !row[1]) return;
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
-                const v24 = Number(row[10]) || 0; const v25 = Number(row[11]) || 0;
-                const commB = getComment(sheet, index, 1);
-                let varPct = v24 !== 0 ? ((v25 - v24) / Math.abs(v24)) * 100 : 0;
-
-                masterData[labelLow] = { original: labelRaw, v24, v25, commB, varPct };
-
-                const card = document.createElement('div');
-                card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi h-52 flex flex-col justify-between";
-                card.onclick = () => openModal(labelRaw, v24, v25, commB, varPct);
-                card.innerHTML = `
-                    <div>
-                        <p class="text-[9px] text-gray-400 font-black uppercase tracking-widest indicator-label" title="${commB || 'Sem definição'}">${labelRaw}</p>
-                        <span class="text-3xl font-black text-black block mt-2">${formatVal(v25, labelLow.includes('margem'))}</span>
-                    </div>
-                    <div class="border-t border-gray-50 pt-3 flex justify-between">
-                        <span class="text-[10px] text-gray-300 font-bold">2024: ${formatVal(v24, labelLow.includes('margem'))}</span>
-                        <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-black">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span>
-                    </div>`;
-                container.appendChild(card);
+                const cellRef = XLSX.utils.encode_cell({r:idx, c:1});
+                const commB = sheet[cellRef]?.c?.[0]?.t ? sheet[cellRef].c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ') : "";
+                masterData[labelLow] = { original: labelRaw, v24: Number(row[10]) || 0, v25: Number(row[11]) || 0, commB };
             });
+
+            // Criar Seções de Cards Sincronizadas
+            Object.keys(GRUPOS).forEach(key => {
+                const config = GRUPOS[key];
+                const sectionDiv = document.createElement('div');
+                sectionDiv.innerHTML = `<div class="section-header">${config.title}</div><div id="grid-${key}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>`;
+                cardsContainer.appendChild(sectionDiv);
+
+                const grid = document.getElementById(`grid-${key}`);
+                Object.keys(masterData).forEach(mKey => {
+                    const ex = config.exclude && config.exclude.some(e => mKey.includes(e));
+                    if (!ex && config.tags.some(t => mKey.includes(t))) {
+                        const item = masterData[mKey];
+                        const varPct = item.v24 !== 0 ? ((item.v25 - item.v24) / Math.abs(item.v24)) * 100 : 0;
+                        const card = document.createElement('div');
+                        card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44";
+                        card.onclick = () => openModal(item.original, item.v24, item.v25, item.commB, varPct);
+                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest" title="${item.commB}">${item.original}</p><span class="text-3xl font-black block mt-2">${formatVal(item.v25, mKey.includes('margem'))}</span></div><div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(item.v24, mKey.includes('margem'))}</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+                        grid.appendChild(card);
+                    }
+                });
+            });
+
             Object.keys(GRUPOS).forEach(key => renderThematicChart(key, masterData));
         }
 
         function renderThematicChart(key, data) {
-            const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [], methods = [];
+            const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [];
             Object.keys(data).forEach(dKey => {
                 const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
                 if (!ex && config.tags.some(t => dKey.includes(t))) {
-                    const item = data[dKey]; labels.push(item.original); methods.push(item.commB);
-                    const isM = key === 'margens';
-                    d24.push(isM ? (item.v24 < 1 ? item.v24 * 100 : item.v24) : item.v24 / config.div);
-                    d25.push(isM ? (item.v25 < 1 ? item.v25 * 100 : item.v25) : item.v25 / config.div);
+                    const item = data[dKey]; labels.push(item.original);
+                    d24.push(key === 'margens' ? (item.v24 < 1 ? item.v24 * 100 : item.v24) : item.v24 / config.div);
+                    d25.push(key === 'margens' ? (item.v25 < 1 ? item.v25 * 100 : item.v25) : item.v25 / config.div);
                 }
             });
+
             if (!labels.length) return;
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             if (charts[key]) charts[key].destroy();
+
+            // Lógica de Eixo Duplo para Giro vs PMRE
+            const isDual = config.dualAxis;
             charts[key] = new Chart(ctx, {
-                type: 'bar', data: { labels, datasets: [{ label: '2024', data: d24, backgroundColor: '#000', borderRadius: 5, method: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', borderRadius: 5, method: methods }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.method[ctx[0].dataIndex] ? '\nInfo: ' + ctx[0].dataset.method[ctx[0].dataIndex] : '' } } }, scales: { y: { ticks: { callback: (v) => v.toLocaleString('pt-BR') + config.scale, font: { size: 9 } } } } }
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: '2024', data: d24, backgroundColor: '#000', borderRadius: 5, yAxisID: isDual ? 'y' : 'y' },
+                        { label: '2025', data: d25, backgroundColor: '#BE1E2D', borderRadius: 5, yAxisID: isDual ? 'y' : 'y' }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } },
+                        y1: isDual ? { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#BE1E2D' }, title: { display: true, text: 'Giro de Renovação' } } : { display: false }
+                    }
+                }
             });
+
+            // Ajuste manual de escalas para o Giro no Eixo Duplo se houver PMRE
+            if (isDual && labels.some(l => l.toLowerCase().includes('giro'))) {
+                charts[key].data.datasets.forEach(ds => {
+                    ds.yAxisID = (ctx) => charts[key].data.labels[ctx.index].toLowerCase().includes('giro') ? 'y1' : 'y';
+                });
+                charts[key].update();
+            }
         }
 
         function openModal(label, v24, v25, cb, varPct) {
@@ -270,7 +302,6 @@
             const met = document.getElementById('modalMetodologia');
             if (cb) { met.innerText = cb; met.classList.remove('hidden'); document.getElementById('modalInfoIcon').classList.remove('hidden'); }
             else { met.classList.add('hidden'); document.getElementById('modalInfoIcon').classList.add('hidden'); }
-            document.getElementById('modalVarValue').innerText = (varPct > 0 ? '+' : '') + varPct.toFixed(1) + '%';
             document.getElementById('detailsModal').style.display = 'flex';
             setTimeout(() => {
                 const ctx = document.getElementById('modalChartCanvas').getContext('2d');
@@ -280,7 +311,7 @@
         }
 
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
-        function gerarPDF() { html2pdf().set({ margin: 10, filename: 'Casa_Nostra_Relatorio.pdf', html2canvas: { scale: 2 }, jsPDF: { orientation: 'landscape' } }).from(document.getElementById('dashboard-content')).save(); }
+        function gerarPDF() { html2pdf().from(document.getElementById('dashboard-content')).set({ margin: 10, filename: 'Casa_Nostra_Intel.pdf', jsPDF: { orientation: 'landscape' } }).save(); }
     </script>
 </body>
 </html>
