@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intel | Business Intelligence</title>
+    <title>Relatório Casa Nostra Intel</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -24,7 +24,7 @@
             'sabrinapagliosaarquitetura@gmail.com'
         ];
 
-        let tokenClient, charts = {}, modalChart = null;
+        let tokenClient, charts = {}, modalChart = null, masterData = {};
         let currentFileId = localStorage.getItem('casaNostra_lastFileId');
         let currentFileName = localStorage.getItem('casaNostra_lastFileName');
 
@@ -89,10 +89,20 @@
         .bg-casa-red { background-color: #BE1E2D; }
         .text-casa-red { color: #BE1E2D; }
         .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); }
-        .chart-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); page-break-inside: avoid; }
-        .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; page-break-after: avoid; }
-        .card-kpi:hover { transform: translateY(-4px); box-shadow: 0 12px 20px -5px rgba(190, 30, 45, 0.2); transition: all 0.3s; }
-        .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
+        .chart-card { background: white; border-radius: 1.5rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
+        .card-kpi:hover { transform: translateY(-4px); transition: all 0.3s; }
+        .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; background: #000; color: white; border-radius: 50%; font-size: 9px; cursor: help; margin-left: 4px; font-weight: bold; }
+        
+        /* Estilos de Impressão */
+        #print-area { display: none; }
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { display: block; position: absolute; left: 0; top: 0; width: 100%; }
+            .print-page { page-break-after: always; padding: 20px; }
+            .print-chart-box { height: 400px; width: 100%; margin-bottom: 20px; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -104,19 +114,21 @@
                 <h2 class="text-2xl font-black uppercase italic text-casa-red mb-4" id="modalTitle">Indicador</h2>
                 <p id="modalDescB" class="text-[11px] text-gray-500 italic leading-relaxed mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
                 <div class="space-y-6">
-                    <div class="p-5 bg-white rounded-2xl border border-gray-100 min-h-32 shadow-sm">
+                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Realizado 2024</span>
                         <p id="modalV24" class="text-2xl font-black mt-1">0</p>
                         <div id="modalNoteK" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
                     </div>
-                    <div class="p-5 bg-white rounded-2xl border-l-4 border-casa-red min-h-32 shadow-sm">
+                    <div class="p-5 bg-white rounded-2xl border-l-4 border-casa-red shadow-sm">
                         <span class="text-[10px] font-bold text-casa-red uppercase tracking-widest">Realizado 2025</span>
                         <p id="modalV25" class="text-2xl font-black mt-1">0</p>
                         <div id="modalNoteL" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
                     </div>
                 </div>
             </div>
-            <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center relative"><canvas id="modalChartCanvas"></canvas></div>
+            <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center relative">
+                <canvas id="modalChartCanvas"></canvas>
+            </div>
         </div>
     </div>
 
@@ -126,28 +138,21 @@
             <h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-casa-red">INTEL</span></h1>
         </div>
         <div class="flex gap-3">
-            <button onclick="gerarPDF()" class="bg-white text-black px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:bg-gray-100 transition-all">📥 GERAR PDF</button>
-            <button onclick="handleAuthClick()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">🔄 ATUALIZAR</button>
-            <button onclick="handleAuthClick(true)" class="bg-casa-red text-white px-5 py-2 rounded-full text-[10px] font-black shadow-lg">📂 TROCAR</button>
+            <button onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF PROFISSIONAL</button>
+            <button onclick="handleAuthClick()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-[10px] font-black">🔄 ATUALIZAR</button>
         </div>
     </nav>
 
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto">
         <div id="cards-sections-container"></div>
+        
         <div class="border-t border-gray-200 pt-16 mt-16 space-y-8">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="chart-card lg:col-span-2"><div class="font-black text-casa-red text-xl uppercase mb-6">1. Receitas de Vendas (M)</div><div class="h-80"><canvas id="chart_receitas"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">2. Lucratividade Operacional (k)</div><div class="h-72"><canvas id="chart_lucratividade"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">3. Margens de Eficiência (%)</div><div class="h-72"><canvas id="chart_margens"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">4. OPEX: Pessoal e Impostos (k)</div><div class="h-72"><canvas id="chart_opex_a"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">5. OPEX: Gestão Administrativa (k)</div><div class="h-72"><canvas id="chart_opex_b"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">6. Fluxo de Estoque e Aquisição (k)</div><div class="h-72"><canvas id="chart_estoque_fin"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">7. Eficiência: PMRE e Giro de Estoque</div><div class="h-72"><canvas id="chart_estoque_giro"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">8. Produtividade e Custo Loja</div><div class="h-72"><canvas id="chart_produtividade"></canvas></div></div>
-                <div class="chart-card"><div class="font-black text-black text-lg uppercase mb-6">9. Capex e Depreciação (k)</div><div class="h-72"><canvas id="chart_capex"></canvas></div></div>
-            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid">
+                </div>
         </div>
     </main>
+
+    <div id="print-area-hidden" style="display: none;"></div>
 
     <script>
         const GRUPOS = {
@@ -164,7 +169,7 @@
 
         function getComment(sheet, row, col) {
             const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})];
-            return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/) && !l.includes('ID#')).join(' ').trim() : "";
+            return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ').trim() : "";
         }
 
         function formatVal(v, isP) {
@@ -175,66 +180,150 @@
 
         function processDashboard(sheet) {
             const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
-            const masterData = {};
+            masterData = {};
             const container = document.getElementById('cards-sections-container');
-            container.innerHTML = '';
+            const chartsGrid = document.getElementById('charts-main-grid');
+            container.innerHTML = ''; chartsGrid.innerHTML = '';
 
             rows.forEach((row, idx) => {
                 if (idx === 0 || !row[1]) return;
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
-                masterData[labelLow] = { original: labelRaw, v24: Number(row[10]) || 0, v25: Number(row[11]) || 0, commB: getComment(sheet, idx, 1), commK: getComment(sheet, idx, 10), commL: getComment(sheet, idx, 11) };
+                masterData[labelLow] = { 
+                    original: labelRaw, 
+                    v24: Number(row[10]) || 0, v25: Number(row[11]) || 0,
+                    commB: getComment(sheet, idx, 1), commK: getComment(sheet, idx, 10), commL: getComment(sheet, idx, 11)
+                };
             });
 
-            Object.keys(GRUPOS).forEach(key => {
+            Object.keys(GRUPOS).forEach((key, i) => {
                 const config = GRUPOS[key];
+                
+                // Criar Seção de Cards
                 const section = document.createElement('div');
                 section.innerHTML = `<div class="section-header">${config.title}</div><div id="grid-${key}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>`;
                 container.appendChild(section);
 
-                const usedLabels = new Set();
+                // Criar Card do Gráfico na UI
+                const chartCard = document.createElement('div');
+                chartCard.className = `chart-card ${key === 'receitas' ? 'lg:col-span-2' : ''}`;
+                chartCard.innerHTML = `<div class="font-black text-black text-lg uppercase mb-2">${config.title}</div>
+                                       <div class="h-80"><canvas id="chart_${key}"></canvas></div>`;
+                chartsGrid.appendChild(chartCard);
+
+                // Injetar Cards Individuais e Evitar Duplicatas
+                const usedInBlock = new Set();
                 Object.keys(masterData).forEach(mKey => {
                     const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
-                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !usedLabels.has(mKey)) {
-                        const it = masterData[mKey]; usedLabels.add(mKey);
+                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !usedInBlock.has(mKey)) {
+                        usedInBlock.add(mKey);
+                        const it = masterData[mKey];
                         const varPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44";
                         card.onclick = () => openModal(it.original, it.v24, it.v25, it.commB, it.commK, it.commL, varPct);
-                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest">${it.original} ${it.commB ? '<span class="info-icon">i</span>' : ''}</p><span class="text-3xl font-black block mt-2">${formatVal(it.v25, mKey.includes('margem'))}</span></div><div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(it.v24, mKey.includes('margem'))}</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest">${it.original} ${it.commB ? '<span class="info-icon">i</span>' : ''}</p>
+                                          <span class="text-3xl font-black block mt-2">${formatVal(it.v25, mKey.includes('margem'))}</span></div>
+                                          <div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(it.v24, mKey.includes('margem'))}</span>
+                                          <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
                         document.getElementById(`grid-${key}`).appendChild(card);
                     }
                 });
+
+                renderThematicChart(key, masterData);
             });
-            Object.keys(GRUPOS).forEach(key => renderThematicChart(key, masterData));
         }
 
         function renderThematicChart(key, data) {
-            const config = GRUPOS[key]; const labels = [], pmre24 = [], pmre25 = [], giro24 = [], giro25 = [], infos = [];
-            const isDual = config.dualAxis;
-            const usedInChart = new Set();
-
+            const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [], dual24 = [], dual25 = [];
+            const used = new Set();
+            
             Object.keys(data).forEach(dKey => {
-                const isEx = config.exclude && config.exclude.some(e => dKey.includes(e));
-                if (!isEx && config.tags.some(t => dKey.includes(t)) && !usedInChart.has(dKey)) {
-                    const it = data[dKey]; usedInChart.add(dKey);
-                    if (isDual) {
-                        if (dKey.includes('pmre')) { pmre24.push(it.v24); pmre25.push(it.v25); infos.push(it.commB); }
-                        else if (dKey.includes('giro')) { giro24.push(it.v24); giro25.push(it.v25); infos.push(it.commB); }
+                const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
+                if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
+                    used.add(dKey); const it = data[dKey];
+                    if (config.dualAxis) {
+                        if (dKey.includes('pmre')) { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
+                        else { dual24.push(it.v24); dual25.push(it.v25); }
                     } else {
-                        labels.push(it.original); infos.push(it.commB);
-                        pmre24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div);
-                        pmre25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
+                        labels.push(it.original);
+                        d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div);
+                        d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
                     }
                 }
             });
 
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
-            if (charts[key]) charts[key].destroy();
             charts[key] = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: isDual ? ['Giro & PMRE'] : labels, datasets: isDual ? [{ label: 'PMRE 2024', data: pmre24, backgroundColor: '#000', yAxisID: 'y', info: infos }, { label: 'PMRE 2025', data: pmre25, backgroundColor: '#BE1E2D', yAxisID: 'y', info: infos }, { label: 'Giro 2024', data: giro24, backgroundColor: '#666', yAxisID: 'y1', info: infos }, { label: 'Giro 2025', data: giro25, backgroundColor: '#FF8A96', yAxisID: 'y1', info: infos }] : [{ label: '2024', data: pmre24, backgroundColor: '#000', info: infos }, { label: '2025', data: pmre25, backgroundColor: '#BE1E2D', info: infos }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info[ctx[0].dataIndex] ? '\nDefinição: ' + ctx[0].dataset.info[ctx[0].dataIndex] : '' } } }, scales: { y: { position: 'left', min: 0, max: isDual ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: isDual ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
+                data: { labels, datasets: config.dualAxis ? [
+                    { label: 'PMRE 2024', data: d24, backgroundColor: '#000', yAxisID: 'y' },
+                    { label: 'PMRE 2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                    { label: 'Giro 2024', data: dual24, backgroundColor: '#666', yAxisID: 'y1' },
+                    { label: 'Giro 2025', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                ] : [
+                    { label: '2024', data: d24, backgroundColor: '#000' },
+                    { label: '2025', data: d25, backgroundColor: '#BE1E2D' }
+                ]},
+                options: { 
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { 
+                        y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } },
+                        y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false }
+                    }
+                }
             });
+        }
+
+        async function gerarPDF() {
+            const printContent = document.getElementById('print-area-hidden');
+            printContent.innerHTML = `<h1 style="font-size: 24px; font-weight: 900; margin-bottom: 30px; border-bottom: 4px solid #BE1E2D; padding-bottom: 10px;">RELATÓRIO EXECUTIVO CASA NOSTRA INTEL</h1>`;
+            
+            // 1. Injetar Gráficos como Imagens para o PDF
+            for (const key of Object.keys(GRUPOS)) {
+                const config = GRUPOS[key];
+                const chartImg = charts[key].toBase64Image();
+                printContent.innerHTML += `
+                    <div style="page-break-after: always; padding: 20px; border: 1px solid #eee;">
+                        <h2 style="font-size: 18px; font-weight: 800; text-transform: uppercase;">${config.title}</h2>
+                        <img src="${chartImg}" style="width: 100%; margin: 20px 0;">
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; font-size: 12px; color: #666; font-style: italic;">
+                            <strong>Nota Técnica:</strong> ${Object.values(masterData).find(it => config.tags.some(t => it.original.toLowerCase().includes(t)))?.commB || "Ver definições na planilha."}
+                        </div>
+                    </div>`;
+            }
+
+            // 2. Injetar Tabela de Detalhes (Cards e Notas)
+            printContent.innerHTML += `<div style="page-break-before: always; padding: 20px;">
+                <h2 style="font-size: 18px; font-weight: 800; border-bottom: 2px solid #000; margin-bottom: 20px;">DETALHAMENTO DE INDICADORES E NOTAS</h2>
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+                    <thead><tr style="background: #000; color: #fff;">
+                        <th style="padding: 10px; text-align: left;">INDICADOR</th>
+                        <th style="padding: 10px;">REAL 2024</th>
+                        <th style="padding: 10px;">REAL 2025</th>
+                        <th style="padding: 10px; text-align: left;">OBSERVAÇÕES (K/L)</th>
+                    </tr></thead>
+                    <tbody>
+                        ${Object.values(masterData).map(it => `
+                            <tr style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 10px; font-weight: bold;">${it.original}</td>
+                                <td style="padding: 10px; text-align: center;">${formatVal(it.v24, it.original.toLowerCase().includes('margem'))}</td>
+                                <td style="padding: 10px; text-align: center;">${formatVal(it.v25, it.original.toLowerCase().includes('margem'))}</td>
+                                <td style="padding: 10px; color: #777;">
+                                    ${it.commK ? '<strong>2024:</strong> '+it.commK+'<br>' : ''}
+                                    ${it.commL ? '<strong>2025:</strong> '+it.commL : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+
+            const opt = { 
+                margin: 10, filename: 'Relatorio_Casa_Nostra.pdf', 
+                html2canvas: { scale: 2, useCORS: true }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } 
+            };
+            html2pdf().set(opt).from(printContent).save();
         }
 
         function openModal(l, v24, v25, cb, ck, cl, varPct) {
@@ -242,8 +331,8 @@
             document.getElementById('modalV24').innerText = formatVal(v24, l.toLowerCase().includes('margem'));
             document.getElementById('modalV25').innerText = formatVal(v25, l.toLowerCase().includes('margem'));
             document.getElementById('modalDescB').innerText = cb || "Definição não cadastrada.";
-            document.getElementById('modalNoteK').innerText = ck || "Sem notas para 2024.";
-            document.getElementById('modalNoteL').innerText = cl || "Sem notas para 2025.";
+            document.getElementById('modalNoteK').innerText = ck ? "Nota 2024: " + ck : "";
+            document.getElementById('modalNoteL').innerText = cl ? "Nota 2025: " + cl : "";
             document.getElementById('detailsModal').style.display = 'flex';
             setTimeout(() => {
                 const ctx = document.getElementById('modalChartCanvas').getContext('2d');
@@ -253,10 +342,6 @@
         }
 
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
-        function gerarPDF() {
-            const opt = { margin: 10, filename: 'Casa_Nostra_BI.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' } };
-            html2pdf().set(opt).from(document.getElementById('dashboard-content')).save();
-        }
     </script>
 </body>
 </html>
