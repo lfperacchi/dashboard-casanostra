@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Indicadores | v1.2.2</title>
+    <title>Casa Nostra Indicadores | v1.2.3</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.2.2";
+        const VERSION = "1.2.3";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -76,9 +76,9 @@
             opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
             estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k', exclude: ['pmre', 'giro'] },
             estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true },
-            produtividade: { title: "8. Produtividade", tags: ['custo loja aberta', 'vendas por funcionário'], div: 1, scale: '', exclude: ['m2'] }, // Removido m2 daqui
-            capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' },
-            eficiencia: { title: "10. Eficiência de Loja", tags: ['vendas por m2'], div: 1, scale: '' } // Novo Bloco Isolado
+            // ADICIONADO 'vendas por m2' AQUI PARA APARECER NA TABELA
+            produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
+            capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
 
         function getComment(sheet, row, col) {
@@ -143,133 +143,106 @@
         function renderThematicChart(key, data) {
             const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [], dual24 = [], dual25 = [], methods = [];
             const used = new Set();
-            
             Object.keys(data).forEach(dKey => {
                 const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
                 if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
+                    // FILTRO DE SEGURANÇA: Se for produtividade e conter 'm2', NÃO adiciona ao gráfico para não quebrar escala
+                    if (key === 'produtividade' && dKey.includes('m2')) return;
+
                     used.add(dKey); const it = data[dKey];
-                    
-                    if (config.dualAxis && key === 'estoque_giro') {
-                        if (!dKey.includes('pmre')) { dual24.push(it.v24); dual25.push(it.v25); } 
-                        else { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
+                    if (config.dualAxis) {
+                        if (dKey.includes('pmre')) { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
+                        else { dual24.push(it.v24); dual25.push(it.v25); }
                     } else {
-                        labels.push(it.original); 
-                        d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); 
-                        d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
+                        labels.push(it.original); d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
                     }
                     methods.push(it.commB);
                 }
             });
-
-            const datasets = (key === 'estoque_giro' && config.dualAxis) ? [
-                    { label: 'PMRE 24', data: d24, backgroundColor: '#000', yAxisID: 'y' },
-                    { label: 'PMRE 25', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
-                    { label: 'Giro 24', data: dual24, backgroundColor: '#666', yAxisID: 'y1' },
-                    { label: 'Giro 25', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
-                ] : [
-                    { label: '2024', data: d24, backgroundColor: '#000', info: methods }, 
-                    { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }
-                ];
-
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             charts[key] = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: (key === 'estoque_giro') ? ['Gestão de Estoque'] : labels, datasets: datasets },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
-                        const infoArr = ctx[0].dataset.info;
-                        return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
-                    }}}}, 
-                    scales: { 
-                        y: { position: 'left', min: 0, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, 
-                        y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } 
-                    } 
-                }
+                data: { labels: config.dualAxis ? ['Eficiência de Estoque'] : labels, datasets: config.dualAxis ? [
+                    { label: 'PMRE 2024', data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                    { label: 'Giro 2024', data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 2025', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                ] : [{ label: '2024', data: d24, backgroundColor: '#000', info: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
+                    const infoArr = ctx[0].dataset.info;
+                    return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
+                }}}}, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
             });
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO SLIDES..."; btn.disabled = true;
-            const printArea = document.createElement('div');
-            printArea.style.width = '290mm'; printArea.style.margin = '0 auto';
-
-            const capa = document.createElement('div');
-            capa.className = 'page-content';
-            capa.innerHTML = `<div style="height:190mm; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
-                <img src="logo.png" style="width:250px; margin-bottom:30px;">
-                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INDICADORES</h1>
-                <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
-                <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
-            </div><div class="html2pdf__page-break"></div>`; 
-            printArea.appendChild(capa);
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ GERANDO PDF..."; btn.disabled = true;
+            const printBuffer = document.createElement('div');
+            printBuffer.style.width = '270mm'; printBuffer.style.margin = '0 auto'; printBuffer.style.padding = '5mm';
+            
+            printBuffer.innerHTML = `<div style="display:flex; justify-content:space-between; border-bottom:5px solid #BE1E2D; padding-bottom:10px; margin-bottom:25px;">
+                <h1 style="font-size:22px; font-weight:900;">RELATÓRIO DE INDICADORES CASA NOSTRA</h1><span style="font-size:10px; color:#999; font-weight:bold;">v${VERSION}</span></div>`;
 
             const chaves = Object.keys(GRUPOS);
             for (let i = 0; i < chaves.length; i++) {
                 const key = chaves[i];
                 const config = GRUPOS[key];
-                const slide = document.createElement('div');
-                slide.className = 'page-content';
+                const sectionBlock = document.createElement('div');
+                
+                // MANTIDO: Quebra de página isolada para cada bloco (v1.2.0 logic)
+                if (i > 0) sectionBlock.style.pageBreakBefore = 'always';
+                
+                sectionBlock.style.marginBottom = '35px';
+                sectionBlock.style.border = '1px solid #f0f0f0';
+                sectionBlock.style.padding = '15px';
+                sectionBlock.style.borderRadius = '15px';
 
-                let rowsHtml = "";
+                let tableRows = "";
                 const used = new Set();
-                let rowCount = 0;
                 Object.keys(masterData).forEach(mKey => {
-                    if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
+                    const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
+                    // AQUI O 'vendas por m2' ENTRA NA TABELA
+                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
                         const vPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
-                        rowCount++;
-                        rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
-                            <td style="padding:5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:8px; color:#666; font-style:italic;">${it.commB}</span></td>
-                            <td style="padding:5px; text-align:center;">${formatVal(it.v24, isP)}</td>
-                            <td style="padding:5px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:8px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                            <td style="padding:5px; font-size:8px; color:#444;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
+                        tableRows += `<tr style="border-bottom:1px solid #eee; font-size:10px;">
+                            <td style="padding:6px; width:40%;"><strong>${it.original}</strong><br><span style="font-size:8px; color:#666; font-style:italic;">${it.commB}</span></td>
+                            <td style="padding:6px; text-align:center;">${formatVal(it.v24, isP)}</td>
+                            <td style="padding:6px; text-align:center; background:#fffcfc;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:9px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
+                            <td style="padding:6px; font-size:9px; color:#555;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
                     }
                 });
 
                 const chartImg = charts[key].toBase64Image();
-                const imgHeight = rowCount > 6 ? '70mm' : '95mm';
-
-                slide.innerHTML = `
-                    <div style="border:1px solid #eee; border-radius:15px; padding:15px; min-height:180mm;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
-                            <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2>
-                            <span style="font-size:10px; color:#999;">CASA NOSTRA INDICADORES</span>
-                        </div>
-                        <table style="width:100%; border-collapse:collapse; margin-bottom:15px;">
-                            <thead style="background:#000; color:#fff; font-size:9px;">
-                                <tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">2024</th><th style="padding:6px;">2025</th><th style="padding:6px; text-align:left;">NOTAS</th></tr>
-                            </thead>
-                            <tbody>${rowsHtml}</tbody>
-                        </table>
-                        <div style="text-align:center;">
-                            <img src="${chartImg}" style="max-width:100%; max-height:${imgHeight}; object-fit:contain; border:1px solid #eee; border-radius:10px;">
-                        </div>
-                    </div>
-                    ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`;
+                sectionBlock.innerHTML = `
+                    <h2 style="font-size:14px; font-weight:800; text-transform:uppercase; border-left:5px solid #BE1E2D; padding-left:10px; margin-bottom:15px; color:#000;">${config.title}</h2>
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:15px;">
+                        <thead style="background:#000; color:#fff; font-size:9px;">
+                            <tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">REAL 2024</th><th style="padding:6px;">REAL 2025</th><th style="padding:6px; text-align:left;">NOTAS</th></tr>
+                        </thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                    <div style="text-align:center;"><img src="${chartImg}" style="width:95%; height:auto; border-radius:10px; border:1px solid #f0f0f0;"></div>`;
                 
-                printArea.appendChild(slide);
+                printBuffer.appendChild(sectionBlock);
                 await new Promise(r => setTimeout(r, 200));
             }
 
             html2pdf().set({ 
-                margin: 5, 
-                filename: `CasaNostra_Final_v${VERSION}.pdf`, 
-                image: { type: 'jpeg', quality: 0.85 }, 
-                html2canvas: { scale: 1.2, useCORS: true, letterRendering: true }, 
+                margin: [10, 5, 10, 5], 
+                filename: `CasaNostra_Indicadores_v${VERSION}.pdf`, 
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
                 pagebreak: { mode: ['css', 'legacy'] }
-            }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
+            }).from(printBuffer).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
         function openModal(l, v24, v25, cb, ck, cl, varPct) {
             document.getElementById('modalTitle').innerText = l;
             document.getElementById('modalV24').innerText = formatVal(v24, l.toLowerCase().includes('margem'));
             document.getElementById('modalV25').innerText = formatVal(v25, l.toLowerCase().includes('margem'));
-            document.getElementById('modalDescB').innerText = cb || "Sem metodologia.";
-            document.getElementById('modalNoteK').innerText = ck ? "2024: " + ck : "";
-            document.getElementById('modalNoteL').innerText = cl ? "2025: " + cl : "";
+            document.getElementById('modalDescB').innerText = cb || "Sem definição cadastrada.";
+            document.getElementById('modalNoteK').innerText = ck ? "Observação 2024: " + ck : "";
+            document.getElementById('modalNoteL').innerText = cl ? "Observação 2025: " + cl : "";
             document.getElementById('detailsModal').style.display = 'flex';
             const ctx = document.getElementById('modalChartCanvas').getContext('2d');
             if (modalChart) modalChart.destroy();
@@ -283,8 +256,6 @@
         .chart-card { background: white; border-radius: 2rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: all 0.3s; }
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
-        .page-content { width: 290mm; padding: 5mm; background: white; }
-        .html2pdf__page-break { height: 0; margin: 0; padding: 0; border: none; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -302,8 +273,9 @@
             <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center"><canvas id="modalChartCanvas"></canvas></div>
         </div>
     </div>
+
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.2</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.3</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
