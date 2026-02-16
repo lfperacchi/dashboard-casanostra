@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Indicadores | v1.2.1</title>
+    <title>Casa Nostra Indicadores | v1.2.0</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.2.1";
+        const VERSION = "1.2.0";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -76,7 +76,7 @@
             opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
             estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k', exclude: ['pmre', 'giro'] },
             estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true },
-            produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '', dualAxis: true },
+            produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '', dualAxis: true }, // Eixo duplo ativado
             capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
 
@@ -142,80 +142,41 @@
         function renderThematicChart(key, data) {
             const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [], dual24 = [], dual25 = [], methods = [];
             const used = new Set();
-            
             Object.keys(data).forEach(dKey => {
                 const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
                 if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
                     used.add(dKey); const it = data[dKey];
-                    methods.push(it.commB);
+                    if (config.dualAxis) {
+                        // Lógica Específica para Eixos Duplos
+                        let isSec = false;
+                        if (key === 'estoque_giro' && !dKey.includes('pmre')) isSec = true; // Giro no eixo direito
+                        if (key === 'produtividade' && dKey.includes('m2')) isSec = true; // Vendas/m2 no eixo direito
 
-                    if (key === 'produtividade') {
-                        // Lógica Especial para Produtividade (Categorias no X, Eixos separados no Y)
-                        labels.push(it.original);
-                        if (dKey.includes('m2')) {
-                            // Vai para Eixo Direito
-                            d24.push(null); d25.push(null); // Esquerda nulo
-                            dual24.push(it.v24); dual25.push(it.v25); // Direita valor
-                        } else {
-                            // Vai para Eixo Esquerdo
-                            d24.push(it.v24); d25.push(it.v25); // Esquerda valor
-                            dual24.push(null); dual25.push(null); // Direita nulo
-                        }
-                    } else if (config.dualAxis && key === 'estoque_giro') {
-                        // Lógica Especial para Estoque (PMRE vs Giro)
-                        if (!dKey.includes('pmre')) { dual24.push(it.v24); dual25.push(it.v25); } // Giro
-                        else { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); } // PMRE
+                        if (!isSec) { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
+                        else { dual24.push(it.v24); dual25.push(it.v25); }
                     } else {
-                        // Padrão
-                        labels.push(it.original); 
-                        d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); 
-                        d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
+                        labels.push(it.original); d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
                     }
+                    methods.push(it.commB);
                 }
             });
 
-            // Configuração dos Datasets
-            let datasets = [];
-            if (key === 'estoque_giro') {
-                 datasets = [
-                    { label: 'PMRE 24', data: d24, backgroundColor: '#000', yAxisID: 'y' },
-                    { label: 'PMRE 25', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
-                    { label: 'Giro 24', data: dual24, backgroundColor: '#666', yAxisID: 'y1' },
-                    { label: 'Giro 25', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
-                ];
-            } else if (key === 'produtividade') {
-                 datasets = [
-                    { label: '2024', data: d24, backgroundColor: '#000', yAxisID: 'y', info: methods },
-                    { label: '2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y', info: methods },
-                    { label: '2024 (m²)', data: dual24, backgroundColor: '#555', yAxisID: 'y1', info: methods },
-                    { label: '2025 (m²)', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1', info: methods }
-                ];
-            } else {
-                 datasets = [
-                    { label: '2024', data: d24, backgroundColor: '#000', info: methods }, 
-                    { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }
-                ];
-            }
+            // Definição das Legendas para Eixo Duplo
+            let labelA = "2024", labelB = "2025", labelC = "Sec 24", labelD = "Sec 25";
+            if (key === 'estoque_giro') { labelA='PMRE 24'; labelB='PMRE 25'; labelC='Giro 24'; labelD='Giro 25'; }
+            if (key === 'produtividade') { labelA='Geral 24'; labelB='Geral 25'; labelC='Por m² 24'; labelD='Por m² 25'; }
 
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             charts[key] = new Chart(ctx, {
                 type: 'bar',
-                data: { 
-                    labels: (key === 'estoque_giro') ? ['Gestão de Estoque'] : labels, 
-                    datasets: datasets 
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
-                        const infoArr = ctx[0].dataset.info;
-                        return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
-                    }}}}, 
-                    scales: { 
-                        y: { position: 'left', min: 0, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, 
-                        y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } 
-                    } 
-                }
+                data: { labels: config.dualAxis ? ['Indicadores Principais'] : labels, datasets: config.dualAxis ? [
+                    { label: labelA, data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: labelB, data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                    { label: labelC, data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: labelD, data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                ] : [{ label: '2024', data: d24, backgroundColor: '#000', info: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
+                    const infoArr = ctx[0].dataset.info;
+                    return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
+                }}}}, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? undefined : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
             });
         }
 
@@ -227,7 +188,7 @@
             const capa = document.createElement('div');
             capa.className = 'page-content';
             capa.innerHTML = `<div style="height:190mm; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
-                <img src="logo.png" style="width:250px; margin-bottom:30px;">
+                <img src="logo.png" style="width:180px; margin-bottom:20px;">
                 <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INDICADORES</h1>
                 <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
                 <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
@@ -332,7 +293,7 @@
         </div>
     </div>
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.1</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.0</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
