@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intel | v1.1.6</title>
+    <title>Casa Nostra Intel | v1.1.7</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.1.6";
+        const VERSION = "1.1.7";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -170,7 +170,7 @@
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ GERANDO PDF..."; btn.disabled = true;
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ PROCESSANDO (AGUARDE)..."; btn.disabled = true;
             const printArea = document.createElement('div');
             printArea.style.width = '270mm'; printArea.style.margin = '0 auto';
             
@@ -183,10 +183,10 @@
                 const config = GRUPOS[key];
                 const sectionBlock = document.createElement('div');
                 
-                // --- AJUSTE CRÍTICO: FORÇAR NOVA PÁGINA ---
-                if (i > 0) sectionBlock.style.pageBreakBefore = 'always';
+                // --- CLASSE CSS PARA FORÇAR QUEBRA ---
+                if (i > 0) sectionBlock.className = 'page-break';
                 
-                sectionBlock.style.marginBottom = '35px';
+                sectionBlock.style.marginBottom = '25px';
                 sectionBlock.style.border = '1px solid #f0f0f0';
                 sectionBlock.style.padding = '15px';
                 sectionBlock.style.borderRadius = '15px';
@@ -220,11 +220,12 @@
                 await new Promise(r => setTimeout(r, 200));
             }
 
+            // CONFIGURAÇÃO OTIMIZADA PARA EVITAR ERRO DE MEMÓRIA
             html2pdf().set({ 
                 margin: [10, 5, 10, 5], 
-                filename: `Relatorio_CasaNostra_v${VERSION}.pdf`, 
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
+                filename: `CasaNostra_BI_v${VERSION}.pdf`, 
+                image: { type: 'jpeg', quality: 0.92 }, // JPEG + Compresão para ficar leve
+                html2canvas: { scale: 1.5, useCORS: true, letterRendering: true }, // Escala reduzida de 2 para 1.5
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
                 pagebreak: { mode: ['css', 'legacy'] }
             }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
@@ -250,6 +251,13 @@
         .chart-card { background: white; border-radius: 2rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: all 0.3s; }
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
+        
+        /* CSS ROBUSTO PARA QUEBRA DE PÁGINA */
+        .page-break { 
+            page-break-before: always !important; 
+            break-before: page !important; 
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -268,7 +276,7 @@
         </div>
     </div>
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-10"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INTEL</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.1.6</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-10"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INTEL</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.1.7</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
