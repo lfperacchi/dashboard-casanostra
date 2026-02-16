@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intel | v1.1.8</title>
+    <title>Casa Nostra Intel | v1.1.9</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.1.8";
+        const VERSION = "1.1.9";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -136,7 +136,7 @@
                 });
                 renderThematicChart(key, masterData);
             });
-            document.getElementById('file-status').innerText = "Sistema v" + VERSION;
+            document.getElementById('file-status').innerText = "Dashboard v" + VERSION;
         }
 
         function renderThematicChart(key, data) {
@@ -170,79 +170,81 @@
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ GERANDO SLIDES..."; btn.disabled = true;
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO SLIDES..."; btn.disabled = true;
             const printArea = document.createElement('div');
             
-            // Container principal para impressão
-            printArea.style.width = '297mm'; // Largura exata A4 Paisagem
+            // Largura fixa A4 Paisagem, sem altura fixa para evitar cortes
+            printArea.style.width = '290mm'; 
+            printArea.style.margin = '0 auto';
 
-            const chaves = Object.keys(GRUPOS);
-            
-            // CAPA (Opcional, mas mantém o padrão)
+            // CAPA
             const capa = document.createElement('div');
-            capa.className = 'slide-page';
-            capa.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
+            capa.className = 'page-content';
+            capa.innerHTML = `<div style="height:190mm; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
                 <img src="logo.png" style="width:150px; margin-bottom:20px;">
-                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INTELIGÊNCIA</h1>
+                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO EXECUTIVO</h1>
                 <h2 style="font-size:20px; color:#555;">CASA NOSTRA INTEL</h2>
                 <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
-            </div>`;
+            </div><div class="html2pdf__page-break"></div>`; // QUEBRA DE PÁGINA NATIVA
             printArea.appendChild(capa);
 
+            const chaves = Object.keys(GRUPOS);
             for (let i = 0; i < chaves.length; i++) {
                 const key = chaves[i];
                 const config = GRUPOS[key];
                 const slide = document.createElement('div');
-                slide.className = 'slide-page'; // Classe mágica para layout fixo
+                slide.className = 'page-content';
 
                 let rowsHtml = "";
                 const used = new Set();
+                let rowCount = 0;
                 Object.keys(masterData).forEach(mKey => {
                     if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
                         const vPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
-                        rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:11px;">
-                            <td style="padding:6px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:9px; color:#666; font-style:italic;">${it.commB}</span></td>
-                            <td style="padding:6px; text-align:center;">${formatVal(it.v24, isP)}</td>
-                            <td style="padding:6px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:9px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                            <td style="padding:6px; font-size:9px; color:#444;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
+                        rowCount++;
+                        rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
+                            <td style="padding:5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:8px; color:#666; font-style:italic;">${it.commB}</span></td>
+                            <td style="padding:5px; text-align:center;">${formatVal(it.v24, isP)}</td>
+                            <td style="padding:5px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:8px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
+                            <td style="padding:5px; font-size:8px; color:#444;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
                     }
                 });
 
                 const chartImg = charts[key].toBase64Image();
-                
-                // Estrutura interna do Slide
+                // Ajusta altura da imagem baseado na quantidade de linhas da tabela para não estourar a página
+                const imgHeight = rowCount > 6 ? '70mm' : '95mm';
+
                 slide.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
-                        <h2 style="font-size:18px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2>
-                        <span style="font-size:10px; color:#999;">CASA NOSTRA INTEL</span>
+                    <div style="border:1px solid #eee; border-radius:15px; padding:15px; min-height:180mm;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
+                            <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2>
+                            <span style="font-size:10px; color:#999;">CASA NOSTRA INTEL</span>
+                        </div>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:15px;">
+                            <thead style="background:#000; color:#fff; font-size:9px;">
+                                <tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">2024</th><th style="padding:6px;">2025</th><th style="padding:6px; text-align:left;">NOTAS</th></tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                        <div style="text-align:center;">
+                            <img src="${chartImg}" style="max-width:100%; max-height:${imgHeight}; object-fit:contain; border:1px solid #eee; border-radius:10px;">
+                        </div>
                     </div>
-                    
-                    <div style="flex-grow: 1; display:flex; flex-direction:column; gap:10px; overflow:hidden;">
-                        <div style="flex-shrink: 0;">
-                            <table style="width:100%; border-collapse:collapse;">
-                                <thead style="background:#000; color:#fff; font-size:10px;">
-                                    <tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">2024</th><th style="padding:6px;">2025</th><th style="padding:6px; text-align:left;">NOTAS</th></tr>
-                                </thead>
-                                <tbody>${rowsHtml}</tbody>
-                            </table>
-                        </div>
-                        <div style="flex-grow:1; display:flex; align-items:center; justify-content:center; min-height:0;">
-                            <img src="${chartImg}" style="max-width:100%; max-height:100%; object-fit:contain; border:1px solid #eee; border-radius:10px;">
-                        </div>
-                    </div>`;
+                    ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`; // QUEBRA CONDICIONAL
                 
                 printArea.appendChild(slide);
-                await new Promise(r => setTimeout(r, 250)); // Delay para aliviar CPU
+                await new Promise(r => setTimeout(r, 200));
             }
 
-            // CONFIGURAÇÃO ULTRA-LEVE PARA EVITAR CRASH
+            // CONFIGURAÇÃO OTIMIZADA (Escala 1.2 = Melhor custo-benefício)
             html2pdf().set({ 
-                margin: 0, 
-                filename: `CasaNostra_Slides_v${VERSION}.pdf`, 
-                image: { type: 'jpeg', quality: 0.85 }, // Qualidade reduzida para leveza
-                html2canvas: { scale: 1, useCORS: true }, // Escala 1.0 (Padrão de tela) para não estourar memória
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+                margin: 5, 
+                filename: `CasaNostra_Final_v${VERSION}.pdf`, 
+                image: { type: 'jpeg', quality: 0.85 }, 
+                html2canvas: { scale: 1.2, useCORS: true, letterRendering: true }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'] }
             }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
@@ -267,17 +269,17 @@
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
         
-        /* ESTILO DO SLIDE (PÁGINA FIXA) */
-        .slide-page {
-            width: 297mm;
-            height: 210mm; /* Tamanho A4 Paisagem */
-            padding: 10mm;
-            page-break-after: always; /* Força nova página após cada slide */
+        /* ESTILO PARA PÁGINAS DO PDF */
+        .page-content {
+            width: 290mm;
+            padding: 5mm;
             background: white;
-            display: flex;
-            flex-direction: column;
-            box-sizing: border-box;
-            overflow: hidden; /* Garante que nada vaze */
+        }
+        .html2pdf__page-break {
+            height: 0;
+            margin: 0;
+            padding: 0;
+            border: none;
         }
     </style>
 </head>
@@ -297,7 +299,7 @@
         </div>
     </div>
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-10"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INTEL</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.1.8</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-10"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INTEL</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.1.9</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
