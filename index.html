@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Indicadores | v1.2.6</title>
+    <title>Casa Nostra Indicadores | v1.2.7</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.2.6";
+        const VERSION = "1.2.7";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -76,8 +76,8 @@
             opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
             estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k', exclude: ['pmre', 'giro'] },
             estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true },
-            // AJUSTE: Tags específicas para garantir captura correta sem falsos positivos
-            produtividade: { title: "8. Produtividade", tags: ['vendas por m2', 'vendas por m²', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
+            // MANTIDO: 'vendas por m' para capturar o dado na tabela
+            produtividade: { title: "8. Produtividade", tags: ['vendas por m', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
             capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
 
@@ -147,8 +147,8 @@
                 const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
                 if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
                     
-                    // SEGURANÇA REFORÇADA: Filtra m2 e m² explicitamente
-                    if (key === 'produtividade' && (dKey.includes('vendas por m2') || dKey.includes('vendas por m²'))) return;
+                    // SEGURANÇA: Mantida a exclusão do gráfico para 'm2' para preservar a escala
+                    if (key === 'produtividade' && dKey.includes('vendas por m')) return;
 
                     used.add(dKey); const it = data[dKey];
                     if (config.dualAxis) {
@@ -175,18 +175,14 @@
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ PROCESSANDO..."; btn.disabled = true;
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO SLIDES..."; btn.disabled = true;
             const printArea = document.createElement('div');
-            
-            // Largura fixa A4 Paisagem
-            printArea.style.width = '290mm'; 
-            printArea.style.margin = '0 auto';
+            printArea.style.width = '290mm'; printArea.style.margin = '0 auto';
 
-            // CAPA
             const capa = document.createElement('div');
             capa.className = 'page-content';
             capa.innerHTML = `<div style="height:190mm; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
-                <img src="logo.png" style="width:160px; margin-bottom:20px;">
+                <img src="logo.png" style="width:200px; margin-bottom:20px;">
                 <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INDICADORES</h1>
                 <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
                 <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
@@ -217,8 +213,9 @@
                 });
 
                 const chartImg = charts[key].toBase64Image();
-                // AJUSTE: Altura máxima 80mm para garantir que tabelas maiores não empurrem a imagem para fora
-                const imgHeight = rowCount > 6 ? '70mm' : '80mm';
+                // AJUSTE CRÍTICO: Reduzi a altura para 75mm e a tolerância para 4 linhas. 
+                // Isso garante que o gráfico sempre caiba, mesmo com a tabela maior.
+                const imgHeight = rowCount > 4 ? '65mm' : '75mm';
 
                 slide.innerHTML = `
                     <div style="border:1px solid #eee; border-radius:15px; padding:15px; min-height:180mm;">
@@ -233,13 +230,13 @@
                             <tbody>${rowsHtml}</tbody>
                         </table>
                         <div style="text-align:center;">
-                            <img src="${chartImg}" style="max-width:100%; max-height:${imgHeight}; object-fit:contain; border:1px solid #eee; border-radius:10px; display:block; margin:0 auto;">
+                            <img src="${chartImg}" style="max-width:100%; max-height:${imgHeight}; object-fit:contain; border:1px solid #eee; border-radius:10px;">
                         </div>
                     </div>
-                    ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`; // QUEBRA CONDICIONAL
+                    ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`;
                 
                 printArea.appendChild(slide);
-                // AJUSTE: Aumento do delay para 500ms para garantir renderização dos últimos gráficos
+                // AJUSTE CRÍTICO: Delay aumentado para 500ms para garantir renderização dos últimos gráficos
                 await new Promise(r => setTimeout(r, 500));
             }
 
@@ -304,7 +301,7 @@
         </div>
     </div>
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-14"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.6</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.7</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
