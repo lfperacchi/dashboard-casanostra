@@ -153,4 +153,164 @@
                     used.add(dKey); const it = data[dKey];
                     if (config.dualAxis) {
                         if (dKey.includes('pmre')) { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
-                        else { dual2
+                        else { dual24.push(it.v24); dual25.push(it.v25); }
+                    } else {
+                        labels.push(it.original); d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
+                    }
+                    methods.push(it.commB);
+                }
+            });
+            const ctx = document.getElementById(`chart_${key}`).getContext('2d');
+            charts[key] = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: config.dualAxis ? ['Gestão'] : labels, datasets: config.dualAxis ? [
+                    { label: 'PMRE 2024', data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                    { label: 'Giro 2024', data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 2025', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                ] : [{ label: '2024', data: d24, backgroundColor: '#000', info: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }] },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    animation: false, // OTIMIZAÇÃO: Desabilita animação para garantir captura instantânea
+                    plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
+                    const infoArr = ctx[0].dataset.info;
+                    return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
+                }}}}, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
+            });
+        }
+
+        async function gerarPDF() {
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO SLIDES..."; btn.disabled = true;
+            const printArea = document.createElement('div');
+            
+            printArea.style.width = '290mm'; 
+            printArea.style.margin = '0 auto';
+
+            const capa = document.createElement('div');
+            capa.className = 'page-content';
+            capa.innerHTML = `<div style="height:190mm; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
+                <img src="logo.png" style="width:200px; margin-bottom:20px;">
+                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INDICADORES</h1>
+                <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
+                <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
+            </div><div class="html2pdf__page-break"></div>`;
+            printArea.appendChild(capa);
+
+            const chaves = Object.keys(GRUPOS);
+            for (let i = 0; i < chaves.length; i++) {
+                const key = chaves[i];
+                const config = GRUPOS[key];
+                const slide = document.createElement('div');
+                slide.className = 'page-content';
+
+                let rowsHtml = "";
+                const used = new Set();
+                let rowCount = 0;
+                Object.keys(masterData).forEach(mKey => {
+                    if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
+                        used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
+                        const vPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
+                        rowCount++;
+                        rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
+                            <td style="padding:5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:8px; color:#666; font-style:italic;">${it.commB}</span></td>
+                            <td style="padding:5px; text-align:center;">${formatVal(it.v24, isP)}</td>
+                            <td style="padding:5px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:8px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
+                            <td style="padding:5px; font-size:8px; color:#444;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
+                    }
+                });
+
+                const chartImg = charts[key].toBase64Image();
+                // AJUSTE CRUCIAL: Altura fixa reduzida para 70mm para garantir que o conteúdo não estoure a página
+                // mesmo com tabelas maiores (como o bloco 8 agora).
+                const imgHeight = '70mm';
+
+                slide.innerHTML = `
+                    <div style="border:1px solid #eee; border-radius:15px; padding:15px; min-height:180mm;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
+                            <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2>
+                            <span style="font-size:10px; color:#999;">CASA NOSTRA INDICADORES</span>
+                        </div>
+                        <table style="width:100%; border-collapse:collapse; margin-bottom:15px;">
+                            <thead style="background:#000; color:#fff; font-size:9px;">
+                                <tr><th style="padding:6px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:6px;">2024</th><th style="padding:6px;">2025</th><th style="padding:6px; text-align:left;">NOTAS</th></tr>
+                            </thead>
+                            <tbody>${rowsHtml}</tbody>
+                        </table>
+                        <div style="text-align:center;">
+                            <img src="${chartImg}" style="max-width:100%; max-height:${imgHeight}; object-fit:contain; border:1px solid #eee; border-radius:10px;">
+                        </div>
+                    </div>
+                    ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`;
+                
+                printArea.appendChild(slide);
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            html2pdf().set({ 
+                margin: 5, 
+                filename: `CasaNostra_Final_v${VERSION}.pdf`, 
+                image: { type: 'jpeg', quality: 0.85 }, 
+                html2canvas: { scale: 1.2, useCORS: true, letterRendering: true }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'] }
+            }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
+        }
+
+        function openModal(l, v24, v25, cb, ck, cl, varPct) {
+            document.getElementById('modalTitle').innerText = l;
+            document.getElementById('modalV24').innerText = formatVal(v24, l.toLowerCase().includes('margem'));
+            document.getElementById('modalV25').innerText = formatVal(v25, l.toLowerCase().includes('margem'));
+            document.getElementById('modalDescB').innerText = cb || "Sem metodologia.";
+            document.getElementById('modalNoteK').innerText = ck ? "2024: " + ck : "";
+            document.getElementById('modalNoteL').innerText = cl ? "2025: " + cl : "";
+            document.getElementById('detailsModal').style.display = 'flex';
+            const ctx = document.getElementById('modalChartCanvas').getContext('2d');
+            if (modalChart) modalChart.destroy();
+            modalChart = new Chart(ctx, { type: 'bar', data: { labels: ['2024', '2025'], datasets: [{ label: l, data: [l.toLowerCase().includes('margem') ? v24*100 : v24, l.toLowerCase().includes('margem') ? v25*100 : v25], backgroundColor: ['#000', '#BE1E2D'], borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false } });
+        }
+        function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
+    </script>
+
+    <style>
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); }
+        .chart-card { background: white; border-radius: 2rem; padding: 1.5rem; border: 1px solid #f3f4f6; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); transition: all 0.3s; }
+        .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
+        .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
+        
+        /* ESTILO PARA PÁGINAS DO PDF */
+        .page-content {
+            width: 290mm;
+            padding: 5mm;
+            background: white;
+        }
+        .html2pdf__page-break {
+            height: 0;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans pb-12">
+    <div id="detailsModal" class="modal items-center justify-center p-4">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-5xl w-full flex flex-col md:flex-row h-[80vh] overflow-hidden">
+            <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto">
+                <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-6 font-bold text-xs uppercase text-left tracking-widest">✕ Fechar</button>
+                <h2 class="text-2xl font-black uppercase italic text-[#BE1E2D] mb-4" id="modalTitle"></h2>
+                <p id="modalDescB" class="text-[11px] text-gray-500 italic mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
+                <div class="space-y-4">
+                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Realizado 2024</span><p id="modalV24" class="text-xl font-black mt-1"></p><div id="modalNoteK" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div></div>
+                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest">Realizado 2025</span><p id="modalV25" class="text-xl font-black mt-1"></p><div id="modalNoteL" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div></div>
+                </div>
+            </div>
+            <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center"><canvas id="modalChartCanvas"></canvas></div>
+        </div>
+    </div>
+    <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.2.8</span></h1></div>
+        <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
+    </nav>
+    <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+</body>
+</html>
