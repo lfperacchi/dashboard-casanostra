@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intelligence v2.1</title>
+    <title>Casa Nostra Intelligence v2.2</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "2.1.0 (Suite Integrada)";
+        const VERSION = "2.2.0 (Automação Total)";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -22,7 +22,8 @@
         const SHEET_ANUAL = "Dashboard_Indicadores IPCA";
         const SHEET_TRI = "Dashboard_Trimestral IPCA";
         
-        // Labels dinâmicos (serão sobrescritos pela leitura do Excel)
+        // Labels Dinâmicos (serão sobrescritos pelo Excel)
+        let LABELS_ANUAL = ['Ano Base', 'Ano Atual']; 
         let LABELS_TRI = ['Base', 'Anterior', 'Atual']; 
 
         const EMAILS_AUTORIZADOS = [
@@ -92,7 +93,7 @@
                 const arrayBuffer = await resp.arrayBuffer();
                 globalWorkbook = XLSX.read(new Uint8Array(arrayBuffer), {type: 'array', cellComments: true});
                 
-                renderDashboard('ANUAL'); // Padrão ao abrir
+                renderDashboard('ANUAL'); 
 
             } catch (error) {
                 console.error(error);
@@ -105,7 +106,7 @@
             masterData = {};
             charts = {};
             
-            // UI Toggle
+            // Toggle Visual
             document.getElementById('btn-anual').className = mode === 'ANUAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
             document.getElementById('btn-tri').className = mode === 'TRIMESTRAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
 
@@ -119,16 +120,22 @@
 
             document.getElementById('file-status').innerText = `Modo: ${mode}`;
             const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
-            
-            // --- AUTOMATIZAÇÃO DE CABEÇALHOS (TRIMESTRAL) ---
-            if (mode === 'TRIMESTRAL') {
-                // Lê células K1, L1, M1 (Indices 10, 11, 12 da linha 0)
-                const headerRow = rows[0];
-                if (headerRow) {
+            const headerRow = rows[0];
+
+            // --- LEITURA DE CABEÇALHOS (AUTOMÁTICA) ---
+            if (headerRow) {
+                if (mode === 'ANUAL') {
+                    // Lê K1 e L1 da aba anual
+                    LABELS_ANUAL = [
+                        headerRow[10] || 'Ano Base',
+                        headerRow[11] || 'Ano Atual'
+                    ];
+                } else {
+                    // Lê K1, L1, M1 da aba trimestral
                     LABELS_TRI = [
-                        headerRow[10] || 'Base', // K1
-                        headerRow[11] || 'Ant.', // L1
-                        headerRow[12] || 'Atual' // M1
+                        headerRow[10] || 'Base',
+                        headerRow[11] || 'Ant.',
+                        headerRow[12] || 'Atual'
                     ];
                 }
             }
@@ -137,34 +144,33 @@
             const chartsGrid = document.getElementById('charts-main-grid');
             container.innerHTML = ''; chartsGrid.innerHTML = '';
 
-            // Processamento dos Dados
             rows.forEach((row, idx) => {
-                if (idx === 0 || !row[1]) return; // Pula cabeçalho
+                if (idx === 0 || !row[1]) return; 
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
                 
                 if (mode === 'ANUAL') {
                     masterData[labelLow] = { 
                         original: labelRaw, 
-                        desc: getComment(sheet, idx, 1), // Comentário B
-                        v1: Number(row[10]) || 0, // K (2024)
-                        v2: Number(row[11]) || 0, // L (2025)
+                        desc: getComment(sheet, idx, 1),
+                        v1: Number(row[10]) || 0, // K
+                        v2: Number(row[11]) || 0, // L
                         v3: null,
-                        note1: getComment(sheet, idx, 10), // Comentário K
-                        note2: getComment(sheet, idx, 11)  // Comentário L
+                        note1: getComment(sheet, idx, 10),
+                        note2: getComment(sheet, idx, 11)
                     };
                 } else {
                     masterData[labelLow] = { 
                         original: labelRaw, 
-                        desc: getComment(sheet, idx, 1), // Comentário B
+                        desc: getComment(sheet, idx, 1),
                         v1: Number(row[10]) || 0, // K
                         v2: Number(row[11]) || 0, // L
                         v3: Number(row[12]) || 0, // M
-                        note1: row[13] || ""       // N (Texto direto)
+                        note1: row[13] || ""       // N
                     };
                 }
             });
 
-            // Renderização
+            // RENDERIZAÇÃO
             Object.keys(GRUPOS).forEach(key => {
                 const config = GRUPOS[key];
                 if (key === 'estoque_giro' && mode === 'TRIMESTRAL') return;
@@ -184,19 +190,16 @@
                         used.add(mKey); const it = masterData[mKey];
                         
                         let cardHtml = "";
-                        // Logica de Cartão
                         if (mode === 'ANUAL') {
                             const varPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                             cardHtml = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
                                         <span class="text-3xl font-black block mt-2">${formatVal(it.v2, mKey.includes('margem'))}</span></div>
                                         <div class="flex justify-between border-t pt-3">
-                                        <span class="text-[10px] text-gray-300">${mode==='ANUAL'?'2024':'Ref'}: ${formatVal(it.v1, mKey.includes('margem'))}</span>
+                                        <span class="text-[10px] text-gray-300">${LABELS_ANUAL[0]}: ${formatVal(it.v1, mKey.includes('margem'))}</span>
                                         <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
                         } else {
-                            // COMPARAÇÃO DUPLA TRIMESTRAL
-                            // YoY (M vs K)
+                            // COMPARAÇÃO DUPLA (WEB)
                             const varYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
-                            // QoQ (M vs L)
                             const varQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
 
                             cardHtml = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
@@ -210,12 +213,7 @@
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44 hover:shadow-md transition-all";
                         card.innerHTML = cardHtml;
-                        
-                        // EVENTO DE CLIQUE CORRIGIDO - Passagem Explícita de Dados
-                        card.onclick = function() {
-                            openModal(it, mode);
-                        };
-
+                        card.onclick = function() { openModal(it, mode); };
                         document.getElementById(`grid-${key}`).appendChild(card);
                     }
                 });
@@ -247,12 +245,13 @@
                 charts[key] = new Chart(ctx, {
                     type: 'bar',
                     data: { labels: config.dualAxis ? ['Gestão'] : labels, datasets: config.dualAxis ? [
-                        { label: 'PMRE 24', data: d1, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 25', data: d2, backgroundColor: '#BE1E2D', yAxisID: 'y' },
-                        { label: 'Giro 24', data: dual1, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 25', data: dual2, backgroundColor: '#FF8A96', yAxisID: 'y1' }
-                    ] : [{ label: '2024', data: d1, backgroundColor: '#000', info: info }, { label: '2025', data: d2, backgroundColor: '#BE1E2D', info: info }] },
+                        { label: `PMRE ${LABELS_ANUAL[0]}`, data: d1, backgroundColor: '#000', yAxisID: 'y' }, { label: `PMRE ${LABELS_ANUAL[1]}`, data: d2, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                        { label: `Giro ${LABELS_ANUAL[0]}`, data: dual1, backgroundColor: '#666', yAxisID: 'y1' }, { label: `Giro ${LABELS_ANUAL[1]}`, data: dual2, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                    ] : [{ label: LABELS_ANUAL[0], data: d1, backgroundColor: '#000', info: info }, { label: LABELS_ANUAL[1], data: d2, backgroundColor: '#BE1E2D', info: info }] },
                     options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info ? '\n'+ctx[0].dataset.info[ctx[0].dataIndex] : '' }}}, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: { display: !!config.dualAxis, position: 'right', grid: {drawOnChartArea: false} } } }
                 });
             } else {
+                // Trimestral (Mantido)
                 const datasets = []; const colors = ['#000000', '#BE1E2D', '#666666', '#FF8A96', '#16a34a']; let cIdx = 0;
                 Object.keys(data).forEach(dKey => {
                     if (!(config.exclude && config.exclude.some(e => dKey.includes(e))) && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
@@ -273,7 +272,6 @@
             }
         }
 
-        // --- GERAÇÃO DE PDF (PRESERVADO v1.3.0) ---
         async function gerarPDF() {
             const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO PDF..."; btn.disabled = true;
             const printArea = document.createElement('div');
@@ -298,9 +296,9 @@
                 const slide = document.createElement('div');
                 slide.className = 'page-content';
 
-                // Tabela HTML Dinâmica
+                // Tabela HTML
                 let tableHeader = currentMode === 'ANUAL' 
-                    ? `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">2024</th><th style="padding:5px;">2025</th><th style="padding:5px;">NOTAS</th></tr>`
+                    ? `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_ANUAL[0]}</th><th style="padding:5px;">${LABELS_ANUAL[1]}</th><th style="padding:5px;">NOTAS</th></tr>`
                     : `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_TRI[0]}</th><th style="padding:5px;">${LABELS_TRI[1]}</th><th style="padding:5px;">${LABELS_TRI[2]}</th><th style="padding:5px;">NOTAS</th></tr>`;
                 
                 let rowsHtml = "";
@@ -315,14 +313,24 @@
                                 <td style="padding:4px 5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666;">${it.desc}</span></td>
                                 <td style="text-align:center;">${formatVal(it.v1, isP)}</td>
                                 <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v2, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                                <td style="font-size:7px; color:#444;">${it.note1 ? '24:'+it.note1 : ''} ${it.note2 ? '25:'+it.note2 : ''}</td></tr>`;
+                                <td style="font-size:7px; color:#444;">${it.note1 ? LABELS_ANUAL[0]+':'+it.note1 : ''} ${it.note2 ? LABELS_ANUAL[1]+':'+it.note2 : ''}</td></tr>`;
                         } else {
-                            const vPct = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0; // YoY na tabela
+                            // PDF TRIMESTRAL: COMPARAÇÃO DUPLA NA CÉLULA (MINI TABELA)
+                            const vYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                            const vQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
+
                             rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
                                 <td style="padding:4px 5px; width:35%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666;">${it.desc}</span></td>
                                 <td style="text-align:center;">${formatVal(it.v1, isP)}</td>
                                 <td style="text-align:center;">${formatVal(it.v2, isP)}</td>
-                                <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v3, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}% (YoY)</span></td>
+                                <td style="text-align:center; background:#fff5f5;">
+                                    <strong>${formatVal(it.v3, isP)}</strong><br>
+                                    <div style="display:flex; justify-content:center; gap:5px; font-size:7px;">
+                                        <span style="color:${vYoY>=0?'#16a34a':'#BE1E2D'}">vs ${LABELS_TRI[0]}: ${vYoY>0?'+':''}${vYoY.toFixed(1)}%</span>
+                                        <span style="color:#ccc">|</span>
+                                        <span style="color:${vQoQ>=0?'#16a34a':'#BE1E2D'}">vs ${LABELS_TRI[1]}: ${vQoQ>0?'+':''}${vQoQ.toFixed(1)}%</span>
+                                    </div>
+                                </td>
                                 <td style="font-size:7px; color:#444; width:20%;">${it.note1}</td></tr>`;
                         }
                     }
@@ -347,25 +355,23 @@
             html2pdf().set({ margin: 0, filename: `CasaNostra_${currentMode}.pdf`, image: { type: 'jpeg', quality: 0.90 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'] } }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
-        // --- UTILITÁRIOS E MODAL ---
         function getComment(sheet, row, col) { const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})]; return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ').trim() : ""; }
         function formatVal(v, isP) { let n = Number(v) || 0; if (isP) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%'; return n.toLocaleString('pt-BR'); }
         
-        // Modal Unificado
         function openModal(it, mode) {
             document.getElementById('modalTitle').innerText = it.original;
             document.getElementById('modalDescB').innerText = it.desc || "Sem metodologia.";
             document.getElementById('detailsModal').style.display = 'flex';
             
-            // Popula os boxes
             if (mode === 'ANUAL') {
-                document.getElementById('modalLeftLabel').innerText = "2024";
-                document.getElementById('modalRightLabel').innerText = "2025";
+                document.getElementById('modalLeftLabel').innerText = LABELS_ANUAL[0];
+                document.getElementById('modalRightLabel').innerText = LABELS_ANUAL[1];
                 document.getElementById('modalVLeft').innerText = formatVal(it.v1, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalVRight').innerText = formatVal(it.v2, it.original.toLowerCase().includes('margem'));
-                document.getElementById('modalNote').innerText = (it.note1 ? "24: " + it.note1 : "") + (it.note2 ? "\n25: " + it.note2 : "");
+                document.getElementById('modalNote').innerText = (it.note1 ? LABELS_ANUAL[0]+": " + it.note1 : "") + (it.note2 ? "\n"+LABELS_ANUAL[1]+": " + it.note2 : "");
                 
-                updateModalChart(it.original, [it.v1, it.v2], ['2024', '2025'], 'bar');
+                // COR RESTAURADA: PRETO (000000) e VERMELHO (BE1E2D)
+                updateModalChart(it.original, [it.v1, it.v2], LABELS_ANUAL, 'bar', ['#000000', '#BE1E2D']);
             } else {
                 document.getElementById('modalLeftLabel').innerText = LABELS_TRI[0];
                 document.getElementById('modalRightLabel').innerText = LABELS_TRI[2];
@@ -373,16 +379,37 @@
                 document.getElementById('modalVRight').innerText = formatVal(it.v3, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalNote').innerText = it.note1 || "";
                 
-                updateModalChart(it.original, [it.v1, it.v2, it.v3], LABELS_TRI, 'line');
+                // Linha vermelha única
+                updateModalChart(it.original, [it.v1, it.v2, it.v3], LABELS_TRI, 'line', ['#BE1E2D']);
             }
         }
 
-        function updateModalChart(l, data, labels, type) { 
+        function updateModalChart(l, data, labels, type, colors) { 
             const ctx = document.getElementById('modalChartCanvas').getContext('2d'); 
             if (modalChart) modalChart.destroy(); 
+            
+            // Configuração dinâmica de dataset (Barra tem cores diferentes, Linha tem uma só)
+            let datasetConfig = {};
+            if (type === 'bar') {
+                datasetConfig = { 
+                    label: l, 
+                    data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), 
+                    backgroundColor: colors, 
+                    borderRadius: 10 
+                };
+            } else {
+                datasetConfig = { 
+                    label: l, 
+                    data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), 
+                    backgroundColor: colors[0], 
+                    borderColor: colors[0], 
+                    tension: 0.3 
+                };
+            }
+
             modalChart = new Chart(ctx, { 
                 type: type, 
-                data: { labels: labels, datasets: [{ label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: '#BE1E2D', borderColor: '#BE1E2D', tension: 0.3 }] }, 
+                data: { labels: labels, datasets: [datasetConfig] }, 
                 options: { responsive: true, maintainAspectRatio: false } 
             }); 
         }
@@ -418,7 +445,7 @@
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
         <div class="flex items-center gap-6">
             <img src="logo.png" alt="Logo" class="h-14">
-            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.1</span></h1>
+            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.2</span></h1>
             <div class="flex bg-gray-900 rounded-full p-1 ml-4">
                 <button id="btn-anual" onclick="renderDashboard('ANUAL')" class="bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg">ANUAL</button>
                 <button id="btn-tri" onclick="renderDashboard('TRIMESTRAL')" class="bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100">TRIMESTRAL</button>
