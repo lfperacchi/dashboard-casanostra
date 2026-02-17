@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intelligence v2.0</title>
+    <title>Casa Nostra Intelligence v2.1</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,15 +13,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "2.0.0 (Suite Integrada)";
+        const VERSION = "2.1.0 (Suite Integrada)";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
         
-        // --- CONFIGURAÇÃO DAS ABAS ---
+        // --- CONFIGURAÇÃO ---
         const SHEET_ANUAL = "Dashboard_Indicadores IPCA";
         const SHEET_TRI = "Dashboard_Trimestral IPCA";
-        const LABELS_TRI = ['1º Tri 24', '3º Tri 25', '4º Tri 25'];
+        
+        // Labels dinâmicos (serão sobrescritos pela leitura do Excel)
+        let LABELS_TRI = ['Base', 'Anterior', 'Atual']; 
 
         const EMAILS_AUTORIZADOS = [
             'lfperacchi@gmail.com', 'lfperacchi.investidor@gmail.com',
@@ -30,11 +32,10 @@
         ];
 
         let tokenClient, globalWorkbook = null;
-        let currentMode = 'ANUAL'; // ou 'TRIMESTRAL'
+        let currentMode = 'ANUAL'; 
         let currentFileId = localStorage.getItem('casaNostra_lastFileId');
-        let charts = {}, masterData = {}; // Resetar ao trocar de aba
+        let charts = {}, masterData = {}, modalChart = null;
 
-        // --- GRUPOS DE INDICADORES (Compartilhados) ---
         const GRUPOS = {
             receitas: { title: "1. Receitas", tags: ['receita bruta', 'receita líquida'], div: 1000000, scale: 'M', exclude: ['cpv', 'lucro bruto'] },
             lucratividade: { title: "2. Lucratividade", tags: ['lucro operacional', 'ebit', 'ebitda', 'lucro líquido', 'lucro nominal', 'resultado operacional', 'lucro bruto'], exclude: ['margem'], div: 1000, scale: 'k' },
@@ -42,7 +43,7 @@
             opex_a: { title: "4. Pessoal e Impostos", tags: ['despesas operacionais', 'impostos totais', 'gasto com pessoal'], div: 1000, scale: 'k' },
             opex_b: { title: "5. Administrativo", tags: ['administrativo', 'publicidade', 'frota'], div: 1000, scale: 'k' },
             estoque_fin: { title: "6. Estoque e Custos", tags: ['aquisição de produtos', 'cpv', 'estoque'], div: 1000, scale: 'k', exclude: ['pmre', 'giro'] },
-            estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true }, // Só aparece no Anual
+            estoque_giro: { title: "7. PMRE e Giro", tags: ['pmre', 'giro de renovação'], div: 1, scale: '', dualAxis: true },
             produtividade: { title: "8. Produtividade", tags: ['vendas por m', 'custo loja aberta', 'vendas por funcionário'], div: 1, scale: '' },
             capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
@@ -65,7 +66,7 @@
                 const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${at}` } });
                 const user = await resp.json();
                 return EMAILS_AUTORIZADOS.includes(user.email.toLowerCase());
-            } catch (e) { console.error(e); return false; }
+            } catch (e) { return false; }
         }
         function handleAuthClick(f = false) {
             if (f) { currentFileId = null; localStorage.removeItem('casaNostra_lastFileId'); }
@@ -85,84 +86,87 @@
 
         async function downloadAndProcessFile(id) {
             try {
-                document.getElementById('file-status').innerText = "Baixando planilha...";
+                document.getElementById('file-status').innerText = "Baixando dados...";
                 const token = gapi.client.getToken();
                 const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&t=${Date.now()}`, { headers: { 'Authorization': `Bearer ${token.access_token}` } });
                 const arrayBuffer = await resp.arrayBuffer();
                 globalWorkbook = XLSX.read(new Uint8Array(arrayBuffer), {type: 'array', cellComments: true});
                 
-                // Inicializa na visão Anual
-                renderDashboard('ANUAL');
+                renderDashboard('ANUAL'); // Padrão ao abrir
 
             } catch (error) {
                 console.error(error);
-                alert("Erro ao ler o arquivo. Verifique se a planilha tem as abas corretas.");
-                document.getElementById('file-status').innerText = "Erro Fatal";
+                alert("Erro ao ler arquivo.");
             }
         }
 
-        // --- MOTOR DE RENDERIZAÇÃO UNIFICADO ---
         function renderDashboard(mode) {
             currentMode = mode;
             masterData = {};
-            charts = {}; // Limpa gráficos anteriores da memória
+            charts = {};
             
-            // Atualiza Botões
+            // UI Toggle
             document.getElementById('btn-anual').className = mode === 'ANUAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
             document.getElementById('btn-tri').className = mode === 'TRIMESTRAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
 
             const sheetName = mode === 'ANUAL' ? SHEET_ANUAL : SHEET_TRI;
             const sheet = globalWorkbook.Sheets[sheetName];
 
-            // PROTEÇÃO ANTI-TELA BRANCA
             if (!sheet) {
-                document.getElementById('cards-sections-container').innerHTML = `<div class="p-10 text-center text-red-600 font-bold border-2 border-red-200 rounded-xl bg-red-50">ERRO: A aba "${sheetName}" não foi encontrada na planilha.<br>Verifique o nome exato no Excel/Sheets.</div>`;
-                document.getElementById('charts-main-grid').innerHTML = '';
+                document.getElementById('cards-sections-container').innerHTML = `<div class="p-10 text-center text-red-600 font-bold bg-red-50 rounded-xl">ERRO: Aba "${sheetName}" não encontrada.</div>`;
                 return;
             }
 
-            document.getElementById('file-status').innerText = `Visualizando: ${mode}`;
-            
-            // Processamento dos Dados
+            document.getElementById('file-status').innerText = `Modo: ${mode}`;
             const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
+            
+            // --- AUTOMATIZAÇÃO DE CABEÇALHOS (TRIMESTRAL) ---
+            if (mode === 'TRIMESTRAL') {
+                // Lê células K1, L1, M1 (Indices 10, 11, 12 da linha 0)
+                const headerRow = rows[0];
+                if (headerRow) {
+                    LABELS_TRI = [
+                        headerRow[10] || 'Base', // K1
+                        headerRow[11] || 'Ant.', // L1
+                        headerRow[12] || 'Atual' // M1
+                    ];
+                }
+            }
+
             const container = document.getElementById('cards-sections-container');
             const chartsGrid = document.getElementById('charts-main-grid');
             container.innerHTML = ''; chartsGrid.innerHTML = '';
 
+            // Processamento dos Dados
             rows.forEach((row, idx) => {
-                if (idx === 0 || !row[1]) return;
+                if (idx === 0 || !row[1]) return; // Pula cabeçalho
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
                 
-                // LÓGICA HÍBRIDA DE LEITURA
                 if (mode === 'ANUAL') {
-                    // Col B=Nome, K=2024, L=2025
                     masterData[labelLow] = { 
                         original: labelRaw, 
-                        desc: getComment(sheet, idx, 1), 
-                        v1: Number(row[10]) || 0, // 2024
-                        v2: Number(row[11]) || 0, // 2025
-                        v3: null, // Sem 3a coluna
-                        noteK: getComment(sheet, idx, 10),
-                        noteL: getComment(sheet, idx, 11)
+                        desc: getComment(sheet, idx, 1), // Comentário B
+                        v1: Number(row[10]) || 0, // K (2024)
+                        v2: Number(row[11]) || 0, // L (2025)
+                        v3: null,
+                        note1: getComment(sheet, idx, 10), // Comentário K
+                        note2: getComment(sheet, idx, 11)  // Comentário L
                     };
                 } else {
-                    // TRIMESTRAL: Col B=Nome, K=1T24, L=3T25, M=4T25, N=Notas
                     masterData[labelLow] = { 
                         original: labelRaw, 
-                        desc: getComment(sheet, idx, 1), 
-                        v1: Number(row[10]) || 0, // 1T 24
-                        v2: Number(row[11]) || 0, // 3T 25
-                        v3: Number(row[12]) || 0, // 4T 25
-                        note: row[13] || ""
+                        desc: getComment(sheet, idx, 1), // Comentário B
+                        v1: Number(row[10]) || 0, // K
+                        v2: Number(row[11]) || 0, // L
+                        v3: Number(row[12]) || 0, // M
+                        note1: row[13] || ""       // N (Texto direto)
                     };
                 }
             });
 
-            // Geração da Interface
+            // Renderização
             Object.keys(GRUPOS).forEach(key => {
                 const config = GRUPOS[key];
-                
-                // Filtro: PMRE só no Anual
                 if (key === 'estoque_giro' && mode === 'TRIMESTRAL') return;
 
                 const section = document.createElement('div');
@@ -176,81 +180,82 @@
 
                 const used = new Set();
                 Object.keys(masterData).forEach(mKey => {
-                    const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
-                    if (!isEx && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
+                    if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey];
                         
-                        // Cálculo de Variação Dinâmico
-                        let vStart = it.v1; 
-                        let vEnd = mode === 'ANUAL' ? it.v2 : it.v3;
-                        let varPct = vStart !== 0 ? ((vEnd - vStart) / Math.abs(vStart)) * 100 : 0;
-                        
-                        // Cartão KPI
+                        let cardHtml = "";
+                        // Logica de Cartão
+                        if (mode === 'ANUAL') {
+                            const varPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                            cardHtml = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
+                                        <span class="text-3xl font-black block mt-2">${formatVal(it.v2, mKey.includes('margem'))}</span></div>
+                                        <div class="flex justify-between border-t pt-3">
+                                        <span class="text-[10px] text-gray-300">${mode==='ANUAL'?'2024':'Ref'}: ${formatVal(it.v1, mKey.includes('margem'))}</span>
+                                        <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+                        } else {
+                            // COMPARAÇÃO DUPLA TRIMESTRAL
+                            // YoY (M vs K)
+                            const varYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                            // QoQ (M vs L)
+                            const varQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
+
+                            cardHtml = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
+                                        <span class="text-3xl font-black block mt-2">${formatVal(it.v3, mKey.includes('margem'))}</span></div>
+                                        <div class="flex justify-between border-t pt-3 gap-2">
+                                            <div class="flex flex-col"><span class="text-[8px] text-gray-400 uppercase">vs ${LABELS_TRI[0]}</span><span class="${varYoY >= 0 ? 'text-green-600' : 'text-red-600'} text-[10px] font-bold">${varYoY > 0 ? '+' : ''}${varYoY.toFixed(1)}%</span></div>
+                                            <div class="flex flex-col border-l pl-2"><span class="text-[8px] text-gray-400 uppercase">vs ${LABELS_TRI[1]}</span><span class="${varQoQ >= 0 ? 'text-green-600' : 'text-red-600'} text-[10px] font-bold">${varQoQ > 0 ? '+' : ''}${varQoQ.toFixed(1)}%</span></div>
+                                        </div>`;
+                        }
+
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44 hover:shadow-md transition-all";
+                        card.innerHTML = cardHtml;
                         
-                        if (mode === 'ANUAL') {
-                            card.onclick = () => openModalAnual(it.original, it.v1, it.v2, it.desc, it.noteK, it.noteL);
-                        } else {
-                            card.onclick = () => openModalTri(it.original, it.v1, it.v2, it.v3, it.desc, it.note);
-                        }
-                        
-                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
-                                          <span class="text-3xl font-black block mt-2">${formatVal(vEnd, mKey.includes('margem'))}</span></div>
-                                          <div class="flex justify-between border-t pt-3">
-                                            <span class="text-[10px] text-gray-300">Ref: ${formatVal(vStart, mKey.includes('margem'))}</span>
-                                            <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span>
-                                          </div>`;
+                        // EVENTO DE CLIQUE CORRIGIDO - Passagem Explícita de Dados
+                        card.onclick = function() {
+                            openModal(it, mode);
+                        };
+
                         document.getElementById(`grid-${key}`).appendChild(card);
                     }
                 });
-                
-                // Gráfico
-                renderDynamicChart(key, masterData, mode);
+                renderChart(key, masterData, mode);
             });
         }
 
-        function renderDynamicChart(key, data, mode) {
+        function renderChart(key, data, mode) {
             const config = GRUPOS[key]; 
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             const used = new Set();
             
-            // CONFIGURAÇÃO DIFERENCIADA ANUAL vs TRIMESTRAL
             if (mode === 'ANUAL') {
-                // ... Lógica de Barras (Anual) ...
-                const labels = [], d24 = [], d25 = [], dual24 = [], dual25 = [], methods = [];
+                const labels = [], d1 = [], d2 = [], dual1 = [], dual2 = [], info = [];
                 Object.keys(data).forEach(dKey => {
-                    const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
-                    if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
+                    if (!(config.exclude && config.exclude.some(e => dKey.includes(e))) && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
                         if (key === 'produtividade' && dKey.includes('vendas por m')) return;
                         used.add(dKey); const it = data[dKey];
                         if (config.dualAxis) {
-                            if (dKey.includes('pmre')) { d24.push(it.v1); d25.push(it.v2); labels.push(it.original); }
-                            else { dual24.push(it.v1); dual25.push(it.v2); }
+                            if (dKey.includes('pmre')) { d1.push(it.v1); d2.push(it.v2); labels.push(it.original); }
+                            else { dual1.push(it.v1); dual2.push(it.v2); }
                         } else {
-                            labels.push(it.original); 
-                            d24.push(key === 'margens' ? (it.v1 < 1 ? it.v1*100 : it.v1) : it.v1/config.div); 
-                            d25.push(key === 'margens' ? (it.v2 < 1 ? it.v2*100 : it.v2) : it.v2/config.div);
+                            labels.push(it.original); info.push(it.desc);
+                            d1.push(key === 'margens' ? (it.v1 < 1 ? it.v1*100 : it.v1) : it.v1/config.div);
+                            d2.push(key === 'margens' ? (it.v2 < 1 ? it.v2*100 : it.v2) : it.v2/config.div);
                         }
-                        methods.push(it.desc);
                     }
                 });
-                
                 charts[key] = new Chart(ctx, {
                     type: 'bar',
                     data: { labels: config.dualAxis ? ['Gestão'] : labels, datasets: config.dualAxis ? [
-                        { label: 'PMRE 24', data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 25', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
-                        { label: 'Giro 24', data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 25', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
-                    ] : [{ label: '2024', data: d24, backgroundColor: '#000' }, { label: '2025', data: d25, backgroundColor: '#BE1E2D' }] },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: { display: !!config.dualAxis, position: 'right', grid: {drawOnChartArea: false} } } }
+                        { label: 'PMRE 24', data: d1, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 25', data: d2, backgroundColor: '#BE1E2D', yAxisID: 'y' },
+                        { label: 'Giro 24', data: dual1, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 25', data: dual2, backgroundColor: '#FF8A96', yAxisID: 'y1' }
+                    ] : [{ label: '2024', data: d1, backgroundColor: '#000', info: info }, { label: '2025', data: d2, backgroundColor: '#BE1E2D', info: info }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info ? '\n'+ctx[0].dataset.info[ctx[0].dataIndex] : '' }}}, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: { display: !!config.dualAxis, position: 'right', grid: {drawOnChartArea: false} } } }
                 });
-
             } else {
-                // ... Lógica de Linhas (Trimestral) ...
                 const datasets = []; const colors = ['#000000', '#BE1E2D', '#666666', '#FF8A96', '#16a34a']; let cIdx = 0;
                 Object.keys(data).forEach(dKey => {
-                    const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
-                    if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
+                    if (!(config.exclude && config.exclude.some(e => dKey.includes(e))) && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
                         if (key === 'produtividade' && dKey.includes('vendas por m')) return;
                         used.add(dKey); const it = data[dKey];
                         const vals = [
@@ -258,28 +263,28 @@
                             key === 'margens' ? (it.v2 < 1 ? it.v2*100 : it.v2) : it.v2/config.div,
                             key === 'margens' ? (it.v3 < 1 ? it.v3*100 : it.v3) : it.v3/config.div
                         ];
-                        datasets.push({ label: it.original, data: vals, borderColor: colors[cIdx++ % 5], backgroundColor: colors[cIdx % 5], tension: 0.3, pointRadius: 4, borderWidth: 2 });
+                        datasets.push({ label: it.original, info: it.desc, data: vals, borderColor: colors[cIdx++ % 5], backgroundColor: colors[cIdx % 5], tension: 0.3, pointRadius: 4, borderWidth: 2 });
                     }
                 });
                 charts[key] = new Chart(ctx, {
                     type: 'line', data: { labels: LABELS_TRI, datasets: datasets },
-                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } } } }
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info ? '\n'+ctx[0].dataset.info : '' }}}, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } } } }
                 });
             }
         }
 
+        // --- GERAÇÃO DE PDF (PRESERVADO v1.3.0) ---
         async function gerarPDF() {
             const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO PDF..."; btn.disabled = true;
             const printArea = document.createElement('div');
             printArea.style.width = '297mm'; printArea.style.margin = '0 auto';
 
-            // CAPA
             const capa = document.createElement('div');
             capa.className = 'page-content';
             capa.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
                 <img src="logo.png" style="width:200px; margin-bottom:20px;">
                 <h1 style="font-size:30px; font-weight:900;">RELATÓRIO ${currentMode}</h1>
-                <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
+                <h2 style="font-size:20px; color:#555;">CASA NOSTRA INDICADORES</h2>
                 <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
             </div><div class="html2pdf__page-break"></div>`;
             printArea.appendChild(capa);
@@ -310,15 +315,15 @@
                                 <td style="padding:4px 5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666;">${it.desc}</span></td>
                                 <td style="text-align:center;">${formatVal(it.v1, isP)}</td>
                                 <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v2, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                                <td style="font-size:7px; color:#444;">${it.noteK ? '24:'+it.noteK : ''} ${it.noteL ? '25:'+it.noteL : ''}</td></tr>`;
+                                <td style="font-size:7px; color:#444;">${it.note1 ? '24:'+it.note1 : ''} ${it.note2 ? '25:'+it.note2 : ''}</td></tr>`;
                         } else {
-                            const vPct = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                            const vPct = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0; // YoY na tabela
                             rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
-                                <td style="padding:4px 5px; width:35%;"><strong>${it.original}</strong></td>
+                                <td style="padding:4px 5px; width:35%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666;">${it.desc}</span></td>
                                 <td style="text-align:center;">${formatVal(it.v1, isP)}</td>
                                 <td style="text-align:center;">${formatVal(it.v2, isP)}</td>
-                                <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v3, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                                <td style="font-size:7px; color:#444; width:20%;">${it.note}</td></tr>`;
+                                <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v3, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}% (YoY)</span></td>
+                                <td style="font-size:7px; color:#444; width:20%;">${it.note1}</td></tr>`;
                         }
                     }
                 });
@@ -327,7 +332,7 @@
                 slide.innerHTML = `<div style="border:1px solid #eee; border-radius:15px; padding:15px; height:100%; display:flex; flex-direction:column;">
                         <div style="flex-shrink: 0;"> 
                             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
-                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2><span style="font-size:10px; color:#999;">CASA NOSTRA</span>
+                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2><span style="font-size:10px; color:#999;">CASA NOSTRA INDICADORES</span>
                             </div>
                             <table style="width:100%; border-collapse:collapse; margin-bottom:10px;"><thead style="background:#000; color:#fff; font-size:9px;">${tableHeader}</thead><tbody>${rowsHtml}</tbody></table>
                         </div>
@@ -342,12 +347,45 @@
             html2pdf().set({ margin: 0, filename: `CasaNostra_${currentMode}.pdf`, image: { type: 'jpeg', quality: 0.90 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'] } }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
-        // --- UTILITÁRIOS ---
+        // --- UTILITÁRIOS E MODAL ---
         function getComment(sheet, row, col) { const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})]; return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ').trim() : ""; }
         function formatVal(v, isP) { let n = Number(v) || 0; if (isP) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%'; return n.toLocaleString('pt-BR'); }
-        function openModalAnual(l, v1, v2, desc, nK, nL) { document.getElementById('modalTitle').innerText = l; document.getElementById('modalV1').innerText = formatVal(v1, l.includes('margem')); document.getElementById('modalV2').innerText = formatVal(v2, l.includes('margem')); document.getElementById('detailsModal').style.display = 'flex'; updateModalChart(l, [v1, v2], ['2024', '2025'], 'bar'); }
-        function openModalTri(l, v1, v2, v3, desc, note) { document.getElementById('modalTitle').innerText = l; document.getElementById('modalV1').innerText = formatVal(v1, l.includes('margem')); document.getElementById('modalV2').innerText = formatVal(v3, l.includes('margem')); document.getElementById('detailsModal').style.display = 'flex'; updateModalChart(l, [v1, v2, v3], LABELS_TRI, 'line'); }
-        function updateModalChart(l, data, labels, type) { const ctx = document.getElementById('modalChartCanvas').getContext('2d'); if (modalChart) modalChart.destroy(); modalChart = new Chart(ctx, { type: type, data: { labels: labels, datasets: [{ label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: '#BE1E2D', borderColor: '#BE1E2D', tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false } }); }
+        
+        // Modal Unificado
+        function openModal(it, mode) {
+            document.getElementById('modalTitle').innerText = it.original;
+            document.getElementById('modalDescB').innerText = it.desc || "Sem metodologia.";
+            document.getElementById('detailsModal').style.display = 'flex';
+            
+            // Popula os boxes
+            if (mode === 'ANUAL') {
+                document.getElementById('modalLeftLabel').innerText = "2024";
+                document.getElementById('modalRightLabel').innerText = "2025";
+                document.getElementById('modalVLeft').innerText = formatVal(it.v1, it.original.toLowerCase().includes('margem'));
+                document.getElementById('modalVRight').innerText = formatVal(it.v2, it.original.toLowerCase().includes('margem'));
+                document.getElementById('modalNote').innerText = (it.note1 ? "24: " + it.note1 : "") + (it.note2 ? "\n25: " + it.note2 : "");
+                
+                updateModalChart(it.original, [it.v1, it.v2], ['2024', '2025'], 'bar');
+            } else {
+                document.getElementById('modalLeftLabel').innerText = LABELS_TRI[0];
+                document.getElementById('modalRightLabel').innerText = LABELS_TRI[2];
+                document.getElementById('modalVLeft').innerText = formatVal(it.v1, it.original.toLowerCase().includes('margem'));
+                document.getElementById('modalVRight').innerText = formatVal(it.v3, it.original.toLowerCase().includes('margem'));
+                document.getElementById('modalNote').innerText = it.note1 || "";
+                
+                updateModalChart(it.original, [it.v1, it.v2, it.v3], LABELS_TRI, 'line');
+            }
+        }
+
+        function updateModalChart(l, data, labels, type) { 
+            const ctx = document.getElementById('modalChartCanvas').getContext('2d'); 
+            if (modalChart) modalChart.destroy(); 
+            modalChart = new Chart(ctx, { 
+                type: type, 
+                data: { labels: labels, datasets: [{ label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: '#BE1E2D', borderColor: '#BE1E2D', tension: 0.3 }] }, 
+                options: { responsive: true, maintainAspectRatio: false } 
+            }); 
+        }
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
     </script>
 
@@ -366,9 +404,11 @@
             <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto">
                 <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-6 font-bold text-xs uppercase text-left tracking-widest">✕ Fechar</button>
                 <h2 class="text-2xl font-black uppercase italic text-[#BE1E2D] mb-4" id="modalTitle"></h2>
+                <p id="modalDescB" class="text-[11px] text-gray-500 italic mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
                 <div class="space-y-4">
-                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Início</span><p id="modalV1" class="text-xl font-black mt-1"></p></div>
-                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest">Atual</span><p id="modalV2" class="text-xl font-black mt-1"></p></div>
+                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span id="modalLeftLabel" class="text-[10px] font-bold text-gray-400 uppercase tracking-widest"></span><p id="modalVLeft" class="text-xl font-black mt-1"></p></div>
+                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span id="modalRightLabel" class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest"></span><p id="modalVRight" class="text-xl font-black mt-1"></p></div>
+                    <div id="modalNote" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
                 </div>
             </div>
             <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center"><canvas id="modalChartCanvas"></canvas></div>
@@ -378,12 +418,17 @@
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
         <div class="flex items-center gap-6">
             <img src="logo.png" alt="Logo" class="h-14">
+            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.1</span></h1>
             <div class="flex bg-gray-900 rounded-full p-1 ml-4">
                 <button id="btn-anual" onclick="renderDashboard('ANUAL')" class="bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg">ANUAL</button>
                 <button id="btn-tri" onclick="renderDashboard('TRIMESTRAL')" class="bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100">TRIMESTRAL</button>
             </div>
         </div>
-        <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
+        <div class="flex gap-3">
+            <button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button>
+            <button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button>
+            <button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button>
+        </div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
