@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Indicadores | v1.3.0</title>
+    <title>Casa Nostra Trimestral | v1.3.3</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,11 +13,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "1.3.0";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
-        const ABA_ALVO = "Dashboard_Indicadores IPCA";
+        
+        const ABA_ALVO = "Dashboard_Trimestral IPCA"; 
+        const LABELS_TRI = ['1º Tri 24', '3º Tri 25', '4º Tri 25']; 
 
         const EMAILS_AUTORIZADOS = [
             'lfperacchi@gmail.com', 'lfperacchi.investidor@gmail.com',
@@ -80,6 +81,7 @@
             capex: { title: "9. Capex e Deprec.", tags: ['capex total', 'depreciação', 'amortização'], div: 1000, scale: 'k' }
         };
 
+        // Função Essencial: Extrai comentários da célula (Notas Amarelas do Sheets)
         function getComment(sheet, row, col) {
             const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})];
             return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ').trim() : "";
@@ -101,9 +103,20 @@
             rows.forEach((row, idx) => {
                 if (idx === 0 || !row[1]) return;
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
+                
+                // --- MAPEAMENTO INTELIGENTE (Igual ao Anual) ---
+                // Nome: Coluna B (row[1])
+                // Metodologia: Comentário da Coluna B (getComment)
+                // Dados: Colunas K, L, M (row[10], row[11], row[12])
+                // Notas: Coluna N (row[13])
+                
                 masterData[labelLow] = { 
-                    original: labelRaw, v24: Number(row[10]) || 0, v25: Number(row[11]) || 0,
-                    commB: getComment(sheet, idx, 1), commK: getComment(sheet, idx, 10), commL: getComment(sheet, idx, 11)
+                    original: labelRaw, 
+                    desc: getComment(sheet, idx, 1), // LÊ O COMENTÁRIO DA CÉLULA B
+                    vT1: Number(row[10]) || 0,       // K
+                    vT2: Number(row[11]) || 0,       // L
+                    vT3: Number(row[12]) || 0,       // M
+                    note: row[13] || ""              // N (Texto direto na célula)
                 };
             });
 
@@ -115,7 +128,7 @@
 
                 const chartCard = document.createElement('div');
                 chartCard.className = `chart-card ${key === 'receitas' ? 'lg:col-span-2' : ''}`;
-                chartCard.innerHTML = `<div class="font-black text-black text-lg uppercase mb-4">${config.title}</div><div class="h-80"><canvas id="chart_${key}"></canvas></div>`;
+                chartCard.innerHTML = `<div class="font-black text-black text-lg uppercase mb-4">${config.title} (Evolução)</div><div class="h-80"><canvas id="chart_${key}"></canvas></div>`;
                 chartsGrid.appendChild(chartCard);
 
                 const used = new Set();
@@ -123,25 +136,32 @@
                     const isEx = config.exclude && config.exclude.some(e => mKey.includes(e));
                     if (!isEx && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey];
-                        const varPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
+                        const varPct = it.vT1 !== 0 ? ((it.vT3 - it.vT1) / Math.abs(it.vT1)) * 100 : 0;
+                        
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44 hover:shadow-md transition-all";
-                        card.onclick = () => openModal(it.original, it.v24, it.v25, it.commB, it.commK, it.commL, varPct);
-                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.commB.replace(/"/g, '&quot;')}">${it.original} ${it.commB ? '<span class="info-icon">i</span>' : ''}</p>
-                                          <span class="text-3xl font-black block mt-2">${formatVal(it.v25, mKey.includes('margem'))}</span></div>
-                                          <div class="flex justify-between border-t pt-3"><span class="text-[10px] text-gray-300">2024: ${formatVal(it.v24, mKey.includes('margem'))}</span>
-                                          <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+                        card.onclick = () => openModal(it.original, it.vT1, it.vT2, it.vT3, it.desc, it.note);
+                        
+                        card.innerHTML = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc.replace(/"/g, '&quot;')}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
+                                          <span class="text-3xl font-black block mt-2">${formatVal(it.vT3, mKey.includes('margem'))}</span></div>
+                                          <div class="flex justify-between border-t pt-3">
+                                            <span class="text-[10px] text-gray-300">Ref: ${formatVal(it.vT1, mKey.includes('margem'))}</span>
+                                            <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold" title="Variação Total">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span>
+                                          </div>`;
                         document.getElementById(`grid-${key}`).appendChild(card);
                     }
                 });
                 renderThematicChart(key, masterData);
             });
-            document.getElementById('file-status').innerText = "Dashboard v" + VERSION;
+            document.getElementById('file-status').innerText = "Trimestral Conectado";
         }
 
         function renderThematicChart(key, data) {
-            const config = GRUPOS[key]; const labels = [], d24 = [], d25 = [], dual24 = [], dual25 = [], methods = [];
+            const config = GRUPOS[key]; const datasets = [];
             const used = new Set();
+            const colors = ['#000000', '#BE1E2D', '#666666', '#FF8A96', '#16a34a'];
+            let colorIdx = 0;
+
             Object.keys(data).forEach(dKey => {
                 const ex = config.exclude && config.exclude.some(e => dKey.includes(e));
                 if (!ex && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
@@ -149,49 +169,47 @@
                     if (key === 'produtividade' && dKey.includes('vendas por m')) return; 
 
                     used.add(dKey); const it = data[dKey];
-                    if (config.dualAxis) {
-                        if (dKey.includes('pmre')) { d24.push(it.v24); d25.push(it.v25); labels.push(it.original); }
-                        else { dual24.push(it.v24); dual25.push(it.v25); }
-                    } else {
-                        labels.push(it.original); d24.push(key === 'margens' ? (it.v24 < 1 ? it.v24 * 100 : it.v24) : it.v24 / config.div); d25.push(key === 'margens' ? (it.v25 < 1 ? it.v25 * 100 : it.v25) : it.v25 / config.div);
-                    }
-                    methods.push(it.commB);
+                    const vals = [
+                        key === 'margens' ? (it.vT1 < 1 ? it.vT1*100 : it.vT1) : it.vT1/config.div,
+                        key === 'margens' ? (it.vT2 < 1 ? it.vT2*100 : it.vT2) : it.vT2/config.div,
+                        key === 'margens' ? (it.vT3 < 1 ? it.vT3*100 : it.vT3) : it.vT3/config.div
+                    ];
+
+                    datasets.push({
+                        label: it.original,
+                        data: vals,
+                        borderColor: colors[colorIdx % colors.length],
+                        backgroundColor: colors[colorIdx % colors.length],
+                        tension: 0.3, pointRadius: 4, borderWidth: 2
+                    });
+                    colorIdx++;
                 }
             });
+
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             charts[key] = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: config.dualAxis ? ['Gestão'] : labels, datasets: config.dualAxis ? [
-                    { label: 'PMRE 2024', data: d24, backgroundColor: '#000', yAxisID: 'y' }, { label: 'PMRE 2025', data: d25, backgroundColor: '#BE1E2D', yAxisID: 'y' },
-                    { label: 'Giro 2024', data: dual24, backgroundColor: '#666', yAxisID: 'y1' }, { label: 'Giro 2025', data: dual25, backgroundColor: '#FF8A96', yAxisID: 'y1' }
-                ] : [{ label: '2024', data: d24, backgroundColor: '#000', info: methods }, { label: '2025', data: d25, backgroundColor: '#BE1E2D', info: methods }] },
+                type: 'line', 
+                data: { labels: LABELS_TRI, datasets: datasets },
                 options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    animation: false,
-                    plugins: { tooltip: { callbacks: { afterBody: (ctx) => {
-                    const infoArr = ctx[0].dataset.info;
-                    return infoArr ? '\nMetodologia: ' + infoArr[ctx[0].dataIndex] : '';
-                }}}}, scales: { y: { position: 'left', min: 0, max: config.dualAxis ? 360 : undefined, ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: config.dualAxis ? { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false } } : { display: false } } }
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    plugins: { tooltip: { mode: 'index', intersect: false } },
+                    scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } } } 
+                } 
             });
         }
 
         async function gerarPDF() {
-            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO SLIDES..."; btn.disabled = true;
-            
-            // Container Temporário Fora da Tela para renderização
+            const btn = document.getElementById('btn-pdf'); btn.innerText = "⌛ CRIANDO PDF..."; btn.disabled = true;
             const printArea = document.createElement('div');
-            printArea.style.width = '297mm'; // Largura exata A4 Landscape
-            printArea.style.margin = '0 auto';
+            printArea.style.width = '297mm'; printArea.style.margin = '0 auto';
 
-            // CAPA
             const capa = document.createElement('div');
-            capa.className = 'page-content'; // Classe CSS define altura exata
+            capa.className = 'page-content';
             capa.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
                 <img src="logo.png" style="width:200px; margin-bottom:20px;">
-                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO DE INDICADORES</h1>
+                <h1 style="font-size:30px; font-weight:900;">RELATÓRIO TRIMESTRAL</h1>
                 <h2 style="font-size:20px; color:#555;">CASA NOSTRA</h2>
-                <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
+                <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">${LABELS_TRI[0]} a ${LABELS_TRI[2]}</span>
             </div><div class="html2pdf__page-break"></div>`;
             printArea.appendChild(capa);
 
@@ -200,37 +218,42 @@
                 const key = chaves[i];
                 const config = GRUPOS[key];
                 const slide = document.createElement('div');
-                slide.className = 'page-content'; // Garante altura 190mm
+                slide.className = 'page-content';
 
                 let rowsHtml = "";
                 const used = new Set();
                 Object.keys(masterData).forEach(mKey => {
                     if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
-                        const vPct = it.v24 !== 0 ? ((it.v25 - it.v24) / Math.abs(it.v24)) * 100 : 0;
+                        const vPct = it.vT1 !== 0 ? ((it.vT3 - it.vT1) / Math.abs(it.vT1)) * 100 : 0;
+                        
                         rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
-                            <td style="padding:4px 5px; width:45%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666; font-style:italic; line-height:1;">${it.commB}</span></td>
-                            <td style="padding:4px 5px; text-align:center;">${formatVal(it.v24, isP)}</td>
-                            <td style="padding:4px 5px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.v25, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
-                            <td style="padding:4px 5px; font-size:7px; color:#444; line-height:1.1;">${it.commK ? '24: '+it.commK : ''} ${it.commL ? '<br>25: '+it.commL : ''}</td></tr>`;
+                            <td style="padding:4px 5px; width:35%;"><strong>${it.original}</strong><br><span style="font-size:7px; color:#666; font-style:italic; line-height:1;">${it.desc}</span></td>
+                            <td style="padding:4px 5px; text-align:center;">${formatVal(it.vT1, isP)}</td>
+                            <td style="padding:4px 5px; text-align:center;">${formatVal(it.vT2, isP)}</td>
+                            <td style="padding:4px 5px; text-align:center; background:#fff5f5;"><strong>${formatVal(it.vT3, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
+                            <td style="padding:4px 5px; font-size:7px; color:#444; width:20%; line-height:1.1;">${it.note}</td></tr>`;
                     }
                 });
 
                 const chartImg = charts[key].toBase64Image();
 
-                // ESTRUTURA FLEXBOX AUTO-AJUSTÁVEL
-                // Header + Tabela (altura variável)
-                // Imagem (preenche o resto, max 100% da área disponível)
                 slide.innerHTML = `
                     <div style="border:1px solid #eee; border-radius:15px; padding:15px; height:100%; display:flex; flex-direction:column;">
                         <div style="flex-shrink: 0;"> 
                             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
-                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2>
-                                <span style="font-size:10px; color:#999;">CASA NOSTRA INDICADORES</span>
+                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title} (Trimestral)</h2>
+                                <span style="font-size:10px; color:#999;">CASA NOSTRA INTEL</span>
                             </div>
                             <table style="width:100%; border-collapse:collapse; margin-bottom:10px;">
                                 <thead style="background:#000; color:#fff; font-size:9px;">
-                                    <tr><th style="padding:5px; text-align:left;">INDICADOR / METODOLOGIA</th><th style="padding:5px;">2024</th><th style="padding:5px;">2025</th><th style="padding:5px; text-align:left;">NOTAS</th></tr>
+                                    <tr>
+                                        <th style="padding:5px; text-align:left;">INDICADOR</th>
+                                        <th style="padding:5px;">${LABELS_TRI[0]}</th>
+                                        <th style="padding:5px;">${LABELS_TRI[1]}</th>
+                                        <th style="padding:5px;">${LABELS_TRI[2]}</th>
+                                        <th style="padding:5px; text-align:left;">NOTAS</th>
+                                    </tr>
                                 </thead>
                                 <tbody>${rowsHtml}</tbody>
                             </table>
@@ -242,13 +265,12 @@
                     ${i < chaves.length - 1 ? '<div class="html2pdf__page-break"></div>' : ''}`;
                 
                 printArea.appendChild(slide);
-                // Delay para garantir renderização
                 await new Promise(r => setTimeout(r, 400));
             }
 
             html2pdf().set({ 
-                margin: 0, // Zera margem do PDF, controla com padding CSS
-                filename: `CasaNostra_Final_v${VERSION}.pdf`, 
+                margin: 0, 
+                filename: `CasaNostra_Trimestral.pdf`, 
                 image: { type: 'jpeg', quality: 0.90 }, 
                 html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, scrollY: 0 }, 
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
@@ -256,17 +278,28 @@
             }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
-        function openModal(l, v24, v25, cb, ck, cl, varPct) {
+        function openModal(l, vT1, vT2, vT3, desc, note) {
             document.getElementById('modalTitle').innerText = l;
-            document.getElementById('modalV24').innerText = formatVal(v24, l.toLowerCase().includes('margem'));
-            document.getElementById('modalV25').innerText = formatVal(v25, l.toLowerCase().includes('margem'));
-            document.getElementById('modalDescB').innerText = cb || "Sem metodologia.";
-            document.getElementById('modalNoteK').innerText = ck ? "2024: " + ck : "";
-            document.getElementById('modalNoteL').innerText = cl ? "2025: " + cl : "";
+            document.getElementById('modalV24').innerText = formatVal(vT1, l.toLowerCase().includes('margem'));
+            document.getElementById('modalV25').innerText = formatVal(vT3, l.toLowerCase().includes('margem'));
+            document.getElementById('modalDescB').innerText = desc || "Sem metodologia.";
+            document.getElementById('modalNoteK').innerText = note;
             document.getElementById('detailsModal').style.display = 'flex';
+            
             const ctx = document.getElementById('modalChartCanvas').getContext('2d');
             if (modalChart) modalChart.destroy();
-            modalChart = new Chart(ctx, { type: 'bar', data: { labels: ['2024', '2025'], datasets: [{ label: l, data: [l.toLowerCase().includes('margem') ? v24*100 : v24, l.toLowerCase().includes('margem') ? v25*100 : v25], backgroundColor: ['#000', '#BE1E2D'], borderRadius: 10 }] }, options: { responsive: true, maintainAspectRatio: false } });
+            modalChart = new Chart(ctx, { 
+                type: 'line', 
+                data: { 
+                    labels: LABELS_TRI, 
+                    datasets: [{ 
+                        label: l, 
+                        data: [l.toLowerCase().includes('margem') ? vT1*100 : vT1, l.toLowerCase().includes('margem') ? vT2*100 : vT2, l.toLowerCase().includes('margem') ? vT3*100 : vT3], 
+                        borderColor: '#BE1E2D', backgroundColor: '#BE1E2D', tension: 0.3 
+                    }] 
+                }, 
+                options: { responsive: true, maintainAspectRatio: false } 
+            });
         }
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
     </script>
@@ -277,22 +310,11 @@
         .section-header { font-weight: 900; color: #9ca3af; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.3em; margin-bottom: 1.5rem; margin-top: 2rem; border-left: 4px solid #BE1E2D; padding-left: 1rem; }
         .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; background: #000; color: white; border-radius: 50%; font-size: 10px; cursor: help; margin-left: 6px; font-weight: bold; font-style: italic; vertical-align: middle; }
         
-        /* ESTILO PARA PÁGINAS DO PDF - RIGOROSO */
         .page-content {
-            width: 297mm; /* Largura Total A4 */
-            height: 209mm; /* Altura A4 - 1mm de segurança */
-            padding: 10mm; /* Margem interna */
-            background: white;
-            box-sizing: border-box;
-            overflow: hidden; /* Corta o que sobrar para não criar página branca */
-            page-break-after: always;
+            width: 297mm; height: 209mm; padding: 10mm;
+            background: white; box-sizing: border-box; overflow: hidden; page-break-after: always;
         }
-        .html2pdf__page-break {
-            height: 0;
-            margin: 0;
-            padding: 0;
-            border: none;
-        }
+        .html2pdf__page-break { height: 0; margin: 0; padding: 0; border: none; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
@@ -303,15 +325,16 @@
                 <h2 class="text-2xl font-black uppercase italic text-[#BE1E2D] mb-4" id="modalTitle"></h2>
                 <p id="modalDescB" class="text-[11px] text-gray-500 italic mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
                 <div class="space-y-4">
-                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Realizado 2024</span><p id="modalV24" class="text-xl font-black mt-1"></p><div id="modalNoteK" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div></div>
-                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest">Realizado 2025</span><p id="modalV25" class="text-xl font-black mt-1"></p><div id="modalNoteL" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div></div>
+                    <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">1º Tri 24</span><p id="modalV24" class="text-xl font-black mt-1"></p></div>
+                    <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest">4º Tri 25</span><p id="modalV25" class="text-xl font-black mt-1"></p></div>
+                    <div id="modalNoteK" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
                 </div>
             </div>
             <div class="p-10 md:w-2/3 bg-white h-full flex flex-col justify-center"><canvas id="modalChartCanvas"></canvas></div>
         </div>
     </div>
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
-        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v1.3.0</span></h1></div>
+        <div class="flex items-center gap-6"><img src="logo.png" alt="Logo" class="h-16"><h1 class="text-lg font-black uppercase tracking-tight">CASA NOSTRA <span class="text-[#BE1E2D]">TRIMESTRAL</span></h1></div>
         <div class="flex gap-3"><button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button><button onclick="handleAuthClick()" class="bg-gray-800 px-5 py-2 rounded-full text-[10px] font-black hover:bg-gray-700 transition-all">🔄 ATUALIZAR</button><button onclick="handleAuthClick(true)" class="bg-[#BE1E2D] px-5 py-2 rounded-full text-[10px] font-black shadow-lg hover:brightness-110 transition-all">📂 TROCAR</button></div>
     </nav>
     <main id="dashboard-content" class="p-6 max-w-[1600px] mx-auto"><div id="file-status" class="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">Aguardando Conexão...</div><div id="cards-sections-container"></div><div class="border-t border-gray-200 pt-16 mt-16 grid grid-cols-1 lg:grid-cols-2 gap-8" id="charts-main-grid"></div></main>
