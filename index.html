@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intelligence v2.2</title>
+    <title>Casa Nostra Intelligence v2.3</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "2.2.0 (Automação Total)";
+        const VERSION = "2.3.0 (Suite Integrada)";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
@@ -125,18 +125,9 @@
             // --- LEITURA DE CABEÇALHOS (AUTOMÁTICA) ---
             if (headerRow) {
                 if (mode === 'ANUAL') {
-                    // Lê K1 e L1 da aba anual
-                    LABELS_ANUAL = [
-                        headerRow[10] || 'Ano Base',
-                        headerRow[11] || 'Ano Atual'
-                    ];
+                    LABELS_ANUAL = [headerRow[10] || 'Ano Base', headerRow[11] || 'Ano Atual'];
                 } else {
-                    // Lê K1, L1, M1 da aba trimestral
-                    LABELS_TRI = [
-                        headerRow[10] || 'Base',
-                        headerRow[11] || 'Ant.',
-                        headerRow[12] || 'Atual'
-                    ];
+                    LABELS_TRI = [headerRow[10] || 'Base', headerRow[11] || 'Ant.', headerRow[12] || 'Atual'];
                 }
             }
 
@@ -198,7 +189,6 @@
                                         <span class="text-[10px] text-gray-300">${LABELS_ANUAL[0]}: ${formatVal(it.v1, mKey.includes('margem'))}</span>
                                         <span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} text-[11px] font-bold">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
                         } else {
-                            // COMPARAÇÃO DUPLA (WEB)
                             const varYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                             const varQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
 
@@ -251,7 +241,6 @@
                     options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { afterBody: (ctx) => ctx[0].dataset.info ? '\n'+ctx[0].dataset.info[ctx[0].dataIndex] : '' }}}, scales: { y: { position: 'left', ticks: { callback: v => v.toLocaleString('pt-BR') + config.scale } }, y1: { display: !!config.dualAxis, position: 'right', grid: {drawOnChartArea: false} } } }
                 });
             } else {
-                // Trimestral (Mantido)
                 const datasets = []; const colors = ['#000000', '#BE1E2D', '#666666', '#FF8A96', '#16a34a']; let cIdx = 0;
                 Object.keys(data).forEach(dKey => {
                     if (!(config.exclude && config.exclude.some(e => dKey.includes(e))) && config.tags.some(t => dKey.includes(t)) && !used.has(dKey)) {
@@ -296,7 +285,6 @@
                 const slide = document.createElement('div');
                 slide.className = 'page-content';
 
-                // Tabela HTML
                 let tableHeader = currentMode === 'ANUAL' 
                     ? `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_ANUAL[0]}</th><th style="padding:5px;">${LABELS_ANUAL[1]}</th><th style="padding:5px;">NOTAS</th></tr>`
                     : `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_TRI[0]}</th><th style="padding:5px;">${LABELS_TRI[1]}</th><th style="padding:5px;">${LABELS_TRI[2]}</th><th style="padding:5px;">NOTAS</th></tr>`;
@@ -315,7 +303,6 @@
                                 <td style="text-align:center; background:#fff5f5;"><strong>${formatVal(it.v2, isP)}</strong><br><span style="font-size:7px; color:${vPct>=0?'#16a34a':'#BE1E2D'}">${vPct>0?'+':''}${vPct.toFixed(1)}%</span></td>
                                 <td style="font-size:7px; color:#444;">${it.note1 ? LABELS_ANUAL[0]+':'+it.note1 : ''} ${it.note2 ? LABELS_ANUAL[1]+':'+it.note2 : ''}</td></tr>`;
                         } else {
-                            // PDF TRIMESTRAL: COMPARAÇÃO DUPLA NA CÉLULA (MINI TABELA)
                             const vYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                             const vQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
 
@@ -363,6 +350,8 @@
             document.getElementById('modalDescB').innerText = it.desc || "Sem metodologia.";
             document.getElementById('detailsModal').style.display = 'flex';
             
+            const varContainer = document.getElementById('modalVarContainer');
+
             if (mode === 'ANUAL') {
                 document.getElementById('modalLeftLabel').innerText = LABELS_ANUAL[0];
                 document.getElementById('modalRightLabel').innerText = LABELS_ANUAL[1];
@@ -370,7 +359,10 @@
                 document.getElementById('modalVRight').innerText = formatVal(it.v2, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalNote').innerText = (it.note1 ? LABELS_ANUAL[0]+": " + it.note1 : "") + (it.note2 ? "\n"+LABELS_ANUAL[1]+": " + it.note2 : "");
                 
-                // COR RESTAURADA: PRETO (000000) e VERMELHO (BE1E2D)
+                // INJEÇÃO DA VARIAÇÃO NO MODAL ANUAL
+                const varPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                varContainer.innerHTML = `<div class="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 flex-1"><span class="text-[9px] text-gray-400 uppercase font-bold block tracking-widest">Variação Total</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} font-black text-lg">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
+
                 updateModalChart(it.original, [it.v1, it.v2], LABELS_ANUAL, 'bar', ['#000000', '#BE1E2D']);
             } else {
                 document.getElementById('modalLeftLabel').innerText = LABELS_TRI[0];
@@ -379,7 +371,14 @@
                 document.getElementById('modalVRight').innerText = formatVal(it.v3, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalNote').innerText = it.note1 || "";
                 
-                // Linha vermelha única
+                // INJEÇÃO DA COMPARAÇÃO DUPLA NO MODAL TRIMESTRAL
+                const varYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
+                const varQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
+                varContainer.innerHTML = `
+                    <div class="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 flex-1"><span class="text-[9px] text-gray-400 uppercase font-bold block tracking-widest">vs ${LABELS_TRI[0]}</span><span class="${varYoY >= 0 ? 'text-green-600' : 'text-red-600'} font-black text-lg">${varYoY > 0 ? '+' : ''}${varYoY.toFixed(1)}%</span></div>
+                    <div class="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 flex-1"><span class="text-[9px] text-gray-400 uppercase font-bold block tracking-widest">vs ${LABELS_TRI[1]}</span><span class="${varQoQ >= 0 ? 'text-green-600' : 'text-red-600'} font-black text-lg">${varQoQ > 0 ? '+' : ''}${varQoQ.toFixed(1)}%</span></div>
+                `;
+
                 updateModalChart(it.original, [it.v1, it.v2, it.v3], LABELS_TRI, 'line', ['#BE1E2D']);
             }
         }
@@ -388,32 +387,24 @@
             const ctx = document.getElementById('modalChartCanvas').getContext('2d'); 
             if (modalChart) modalChart.destroy(); 
             
-            // Configuração dinâmica de dataset (Barra tem cores diferentes, Linha tem uma só)
             let datasetConfig = {};
             if (type === 'bar') {
-                datasetConfig = { 
-                    label: l, 
-                    data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), 
-                    backgroundColor: colors, 
-                    borderRadius: 10 
-                };
+                datasetConfig = { label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: colors, borderRadius: 10 };
             } else {
-                datasetConfig = { 
-                    label: l, 
-                    data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), 
-                    backgroundColor: colors[0], 
-                    borderColor: colors[0], 
-                    tension: 0.3 
-                };
+                datasetConfig = { label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: colors[0], borderColor: colors[0], tension: 0.3 };
             }
 
-            modalChart = new Chart(ctx, { 
-                type: type, 
-                data: { labels: labels, datasets: [datasetConfig] }, 
-                options: { responsive: true, maintainAspectRatio: false } 
-            }); 
+            modalChart = new Chart(ctx, { type: type, data: { labels: labels, datasets: [datasetConfig] }, options: { responsive: true, maintainAspectRatio: false } }); 
         }
+        
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
+
+        // --- ATALHO TECLA ESC PARA FECHAR O MODAL ---
+        window.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && document.getElementById('detailsModal').style.display === 'flex') {
+                closeModal();
+            }
+        });
     </script>
 
     <style>
@@ -428,13 +419,19 @@
 <body class="bg-gray-50 text-gray-900 font-sans pb-12">
     <div id="detailsModal" class="modal items-center justify-center p-4">
         <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-5xl w-full flex flex-col md:flex-row h-[80vh] overflow-hidden">
-            <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto">
-                <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-6 font-bold text-xs uppercase text-left tracking-widest">✕ Fechar</button>
+            <div class="p-8 md:w-1/3 bg-gray-50 border-r border-gray-100 flex flex-col overflow-y-auto relative">
+                <button onclick="closeModal()" class="text-gray-400 hover:text-black mb-6 font-bold text-xs uppercase text-left tracking-widest flex items-center gap-2">
+                    <span>✕ Fechar</span>
+                    <span class="bg-gray-200 text-gray-500 text-[8px] px-2 py-1 rounded">ESC</span>
+                </button>
                 <h2 class="text-2xl font-black uppercase italic text-[#BE1E2D] mb-4" id="modalTitle"></h2>
                 <p id="modalDescB" class="text-[11px] text-gray-500 italic mb-8 bg-gray-100 p-4 rounded-xl border border-gray-200"></p>
                 <div class="space-y-4">
                     <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span id="modalLeftLabel" class="text-[10px] font-bold text-gray-400 uppercase tracking-widest"></span><p id="modalVLeft" class="text-xl font-black mt-1"></p></div>
                     <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span id="modalRightLabel" class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest"></span><p id="modalVRight" class="text-xl font-black mt-1"></p></div>
+                    
+                    <div id="modalVarContainer" class="flex gap-2"></div>
+
                     <div id="modalNote" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
                 </div>
             </div>
@@ -445,7 +442,7 @@
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
         <div class="flex items-center gap-6">
             <img src="logo.png" alt="Logo" class="h-14">
-            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.2</span></h1>
+            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.3</span></h1>
             <div class="flex bg-gray-900 rounded-full p-1 ml-4">
                 <button id="btn-anual" onclick="renderDashboard('ANUAL')" class="bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg">ANUAL</button>
                 <button id="btn-tri" onclick="renderDashboard('TRIMESTRAL')" class="bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100">TRIMESTRAL</button>
