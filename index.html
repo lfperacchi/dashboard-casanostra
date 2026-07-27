@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
     <link rel="icon" type="image/png" href="logo.png">
-    <title>Casa Nostra Intelligence v2.3</title>
+    <title>Casa Nostra Intelligence v2.4</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -13,14 +13,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <script>
-        const VERSION = "2.3.0 (Suite Integrada)";
+        const VERSION = "2.4.0 (Multi-Abas)";
         const CLIENT_ID = '967312917527-sr2r24n2m9g0r3c5b7b87hpop3se3vh8.apps.googleusercontent.com';
         const API_KEY = 'AIzaSyBuVMvZuFTYAIcrlzK3YnB0sTGYsmlvZFA';
         const SCOPES = 'https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email';
-        
-        // --- CONFIGURAÇÃO ---
-        const SHEET_ANUAL = "Dashboard_Indicadores IPCA";
-        const SHEET_TRI = "Dashboard_Trimestral IPCA";
         
         // Labels Dinâmicos (serão sobrescritos pelo Excel)
         let LABELS_ANUAL = ['Ano Base', 'Ano Atual']; 
@@ -34,6 +30,7 @@
 
         let tokenClient, globalWorkbook = null;
         let currentMode = 'ANUAL'; 
+        let currentSheetName = '';
         let currentFileId = localStorage.getItem('casaNostra_lastFileId');
         let charts = {}, masterData = {}, modalChart = null;
 
@@ -92,39 +89,54 @@
                 const resp = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&t=${Date.now()}`, { headers: { 'Authorization': `Bearer ${token.access_token}` } });
                 const arrayBuffer = await resp.arrayBuffer();
                 globalWorkbook = XLSX.read(new Uint8Array(arrayBuffer), {type: 'array', cellComments: true});
-                
-                renderDashboard('ANUAL'); 
+
+                // --- POPULAR O MENU SELETOR COM TODAS AS ABAS DA PLANILHA ---
+                const selector = document.getElementById('sheet-selector');
+                selector.innerHTML = '';
+                globalWorkbook.SheetNames.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.innerText = name.toUpperCase();
+                    selector.appendChild(opt);
+                });
+
+                // Tenta selecionar a aba padrão de início (se existir)
+                if(globalWorkbook.SheetNames.includes("Dashboard_Indicadores IPCA")){
+                    selector.value = "Dashboard_Indicadores IPCA";
+                }
+
+                // Inicia a renderização baseada na aba selecionada
+                renderDashboard(selector.value); 
 
             } catch (error) {
                 console.error(error);
-                alert("Erro ao ler arquivo.");
+                alert("Erro ao ler arquivo. Verifique permissões.");
             }
         }
 
-        function renderDashboard(mode) {
-            currentMode = mode;
+        function renderDashboard(sheetName) {
+            currentSheetName = sheetName;
+            
+            // AUTO-DETECÇÃO DE MODO: Se o nome da aba tiver "tri" ou "trimestral", muda o modo
+            currentMode = sheetName.toLowerCase().includes('tri') ? 'TRIMESTRAL' : 'ANUAL';
+            
             masterData = {};
             charts = {};
-            
-            // Toggle Visual
-            document.getElementById('btn-anual').className = mode === 'ANUAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
-            document.getElementById('btn-tri').className = mode === 'TRIMESTRAL' ? "bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg" : "bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100";
 
-            const sheetName = mode === 'ANUAL' ? SHEET_ANUAL : SHEET_TRI;
             const sheet = globalWorkbook.Sheets[sheetName];
 
             if (!sheet) {
-                document.getElementById('cards-sections-container').innerHTML = `<div class="p-10 text-center text-red-600 font-bold bg-red-50 rounded-xl">ERRO: Aba "${sheetName}" não encontrada.</div>`;
+                document.getElementById('cards-sections-container').innerHTML = `<div class="p-10 text-center text-red-600 font-bold bg-red-50 rounded-xl">ERRO: Aba selecionada não encontrada.</div>`;
                 return;
             }
 
-            document.getElementById('file-status').innerText = `Modo: ${mode}`;
+            document.getElementById('file-status').innerText = `Aba Ativa: ${sheetName} | Modo: ${currentMode}`;
             const rows = XLSX.utils.sheet_to_json(sheet, {header: 1});
             const headerRow = rows[0];
 
-            // --- LEITURA DE CABEÇALHOS (AUTOMÁTICA) ---
+            // --- LEITURA DE CABEÇALHOS K1, L1, M1 ---
             if (headerRow) {
-                if (mode === 'ANUAL') {
+                if (currentMode === 'ANUAL') {
                     LABELS_ANUAL = [headerRow[10] || 'Ano Base', headerRow[11] || 'Ano Atual'];
                 } else {
                     LABELS_TRI = [headerRow[10] || 'Base', headerRow[11] || 'Ant.', headerRow[12] || 'Atual'];
@@ -138,8 +150,8 @@
             rows.forEach((row, idx) => {
                 if (idx === 0 || !row[1]) return; 
                 const labelRaw = row[1].toString(); const labelLow = labelRaw.toLowerCase().trim();
-                
-                if (mode === 'ANUAL') {
+
+                if (currentMode === 'ANUAL') {
                     masterData[labelLow] = { 
                         original: labelRaw, 
                         desc: getComment(sheet, idx, 1),
@@ -161,10 +173,10 @@
                 }
             });
 
-            // RENDERIZAÇÃO
+            // RENDERIZAÇÃO DE CARTÕES
             Object.keys(GRUPOS).forEach(key => {
                 const config = GRUPOS[key];
-                if (key === 'estoque_giro' && mode === 'TRIMESTRAL') return;
+                if (key === 'estoque_giro' && currentMode === 'TRIMESTRAL') return;
 
                 const section = document.createElement('div');
                 section.innerHTML = `<div class="section-header">${config.title}</div><div id="grid-${key}" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"></div>`;
@@ -179,9 +191,9 @@
                 Object.keys(masterData).forEach(mKey => {
                     if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey];
-                        
+
                         let cardHtml = "";
-                        if (mode === 'ANUAL') {
+                        if (currentMode === 'ANUAL') {
                             const varPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                             cardHtml = `<div><p class="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center" title="${it.desc}">${it.original} ${it.desc ? '<span class="info-icon">i</span>' : ''}</p>
                                         <span class="text-3xl font-black block mt-2">${formatVal(it.v2, mKey.includes('margem'))}</span></div>
@@ -203,11 +215,11 @@
                         const card = document.createElement('div');
                         card.className = "bg-white p-6 rounded-3xl border border-gray-100 shadow-sm cursor-pointer card-kpi flex flex-col justify-between h-44 hover:shadow-md transition-all";
                         card.innerHTML = cardHtml;
-                        card.onclick = function() { openModal(it, mode); };
+                        card.onclick = function() { openModal(it, currentMode); };
                         document.getElementById(`grid-${key}`).appendChild(card);
                     }
                 });
-                renderChart(key, masterData, mode);
+                renderChart(key, masterData, currentMode);
             });
         }
 
@@ -215,7 +227,7 @@
             const config = GRUPOS[key]; 
             const ctx = document.getElementById(`chart_${key}`).getContext('2d');
             const used = new Set();
-            
+
             if (mode === 'ANUAL') {
                 const labels = [], d1 = [], d2 = [], dual1 = [], dual2 = [], info = [];
                 Object.keys(data).forEach(dKey => {
@@ -271,7 +283,7 @@
             capa.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 4px solid #BE1E2D; border-radius: 20px;">
                 <img src="logo.png" style="width:200px; margin-bottom:20px;">
                 <h1 style="font-size:30px; font-weight:900;">RELATÓRIO ${currentMode}</h1>
-                <h2 style="font-size:20px; color:#555;">CASA NOSTRA INDICADORES</h2>
+                <h2 style="font-size:20px; color:#555; text-transform:uppercase;">${currentSheetName}</h2>
                 <span style="margin-top:20px; font-size:12px; font-weight:bold; color:#BE1E2D;">v${VERSION}</span>
             </div><div class="html2pdf__page-break"></div>`;
             printArea.appendChild(capa);
@@ -280,7 +292,7 @@
             for (let i = 0; i < chaves.length; i++) {
                 const key = chaves[i];
                 if (key === 'estoque_giro' && currentMode === 'TRIMESTRAL') continue;
-                
+
                 const config = GRUPOS[key];
                 const slide = document.createElement('div');
                 slide.className = 'page-content';
@@ -288,13 +300,13 @@
                 let tableHeader = currentMode === 'ANUAL' 
                     ? `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_ANUAL[0]}</th><th style="padding:5px;">${LABELS_ANUAL[1]}</th><th style="padding:5px;">NOTAS</th></tr>`
                     : `<tr><th style="padding:5px;">INDICADOR</th><th style="padding:5px;">${LABELS_TRI[0]}</th><th style="padding:5px;">${LABELS_TRI[1]}</th><th style="padding:5px;">${LABELS_TRI[2]}</th><th style="padding:5px;">NOTAS</th></tr>`;
-                
+
                 let rowsHtml = "";
                 const used = new Set();
                 Object.keys(masterData).forEach(mKey => {
                     if (!(config.exclude && config.exclude.some(e => mKey.includes(e))) && config.tags.some(t => mKey.includes(t)) && !used.has(mKey)) {
                         used.add(mKey); const it = masterData[mKey]; const isP = mKey.includes('margem');
-                        
+
                         if (currentMode === 'ANUAL') {
                             const vPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                             rowsHtml += `<tr style="border-bottom:1px solid #ddd; font-size:10px;">
@@ -327,7 +339,7 @@
                 slide.innerHTML = `<div style="border:1px solid #eee; border-radius:15px; padding:15px; height:100%; display:flex; flex-direction:column;">
                         <div style="flex-shrink: 0;"> 
                             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:4px solid #BE1E2D; padding-bottom:5px; margin-bottom:10px;">
-                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2><span style="font-size:10px; color:#999;">CASA NOSTRA INDICADORES</span>
+                                <h2 style="font-size:16px; font-weight:900; text-transform:uppercase; color:#000;">${config.title}</h2><span style="font-size:10px; color:#999; text-transform:uppercase;">${currentSheetName}</span>
                             </div>
                             <table style="width:100%; border-collapse:collapse; margin-bottom:10px;"><thead style="background:#000; color:#fff; font-size:9px;">${tableHeader}</thead><tbody>${rowsHtml}</tbody></table>
                         </div>
@@ -339,17 +351,17 @@
                 await new Promise(r => setTimeout(r, 400));
             }
 
-            html2pdf().set({ margin: 0, filename: `CasaNostra_${currentMode}.pdf`, image: { type: 'jpeg', quality: 0.90 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'] } }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
+            html2pdf().set({ margin: 0, filename: `CasaNostra_${currentSheetName}.pdf`, image: { type: 'jpeg', quality: 0.90 }, html2canvas: { scale: 1.5, useCORS: true, letterRendering: true, scrollY: 0 }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }, pagebreak: { mode: ['css', 'legacy'] } }).from(printArea).save().then(() => { btn.innerText = "📥 GERAR PDF"; btn.disabled = false; });
         }
 
         function getComment(sheet, row, col) { const cell = sheet[XLSX.utils.encode_cell({r:row, c:col})]; return cell?.c?.[0]?.t ? cell.c[0].t.split('\n').filter(l => !l.match(/\d{4}/)).join(' ').trim() : ""; }
         function formatVal(v, isP) { let n = Number(v) || 0; if (isP) return (n < 1 && n !== 0 ? n * 100 : n).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%'; return n.toLocaleString('pt-BR'); }
-        
+
         function openModal(it, mode) {
             document.getElementById('modalTitle').innerText = it.original;
             document.getElementById('modalDescB').innerText = it.desc || "Sem metodologia.";
             document.getElementById('detailsModal').style.display = 'flex';
-            
+
             const varContainer = document.getElementById('modalVarContainer');
 
             if (mode === 'ANUAL') {
@@ -358,8 +370,7 @@
                 document.getElementById('modalVLeft').innerText = formatVal(it.v1, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalVRight').innerText = formatVal(it.v2, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalNote').innerText = (it.note1 ? LABELS_ANUAL[0]+": " + it.note1 : "") + (it.note2 ? "\n"+LABELS_ANUAL[1]+": " + it.note2 : "");
-                
-                // INJEÇÃO DA VARIAÇÃO NO MODAL ANUAL
+
                 const varPct = it.v1 !== 0 ? ((it.v2 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                 varContainer.innerHTML = `<div class="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 flex-1"><span class="text-[9px] text-gray-400 uppercase font-bold block tracking-widest">Variação Total</span><span class="${varPct >= 0 ? 'text-green-600' : 'text-red-600'} font-black text-lg">${varPct > 0 ? '+' : ''}${varPct.toFixed(1)}%</span></div>`;
 
@@ -370,8 +381,7 @@
                 document.getElementById('modalVLeft').innerText = formatVal(it.v1, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalVRight').innerText = formatVal(it.v3, it.original.toLowerCase().includes('margem'));
                 document.getElementById('modalNote').innerText = it.note1 || "";
-                
-                // INJEÇÃO DA COMPARAÇÃO DUPLA NO MODAL TRIMESTRAL
+
                 const varYoY = it.v1 !== 0 ? ((it.v3 - it.v1) / Math.abs(it.v1)) * 100 : 0;
                 const varQoQ = it.v2 !== 0 ? ((it.v3 - it.v2) / Math.abs(it.v2)) * 100 : 0;
                 varContainer.innerHTML = `
@@ -386,7 +396,7 @@
         function updateModalChart(l, data, labels, type, colors) { 
             const ctx = document.getElementById('modalChartCanvas').getContext('2d'); 
             if (modalChart) modalChart.destroy(); 
-            
+
             let datasetConfig = {};
             if (type === 'bar') {
                 datasetConfig = { label: l, data: data.map(v => l.toLowerCase().includes('margem') && v<1 ? v*100 : v), backgroundColor: colors, borderRadius: 10 };
@@ -396,10 +406,9 @@
 
             modalChart = new Chart(ctx, { type: type, data: { labels: labels, datasets: [datasetConfig] }, options: { responsive: true, maintainAspectRatio: false } }); 
         }
-        
+
         function closeModal() { document.getElementById('detailsModal').style.display = 'none'; }
 
-        // --- ATALHO TECLA ESC PARA FECHAR O MODAL ---
         window.addEventListener('keydown', function (event) {
             if (event.key === 'Escape' && document.getElementById('detailsModal').style.display === 'flex') {
                 closeModal();
@@ -429,7 +438,7 @@
                 <div class="space-y-4">
                     <div class="p-5 bg-white rounded-2xl border border-gray-100 shadow-sm"><span id="modalLeftLabel" class="text-[10px] font-bold text-gray-400 uppercase tracking-widest"></span><p id="modalVLeft" class="text-xl font-black mt-1"></p></div>
                     <div class="p-5 bg-white rounded-2xl border-l-4 border-[#BE1E2D] shadow-sm"><span id="modalRightLabel" class="text-[10px] font-bold text-[#BE1E2D] uppercase tracking-widest"></span><p id="modalVRight" class="text-xl font-black mt-1"></p></div>
-                    
+
                     <div id="modalVarContainer" class="flex gap-2"></div>
 
                     <div id="modalNote" class="text-[10px] text-gray-500 mt-2 border-t pt-2 italic"></div>
@@ -442,11 +451,18 @@
     <nav class="bg-black text-white flex justify-between items-center shadow-xl border-b-4 border-[#BE1E2D] sticky top-0 z-40 h-20 px-6">
         <div class="flex items-center gap-6">
             <img src="logo.png" alt="Logo" class="h-14">
-            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.3</span></h1>
-            <div class="flex bg-gray-900 rounded-full p-1 ml-4">
-                <button id="btn-anual" onclick="renderDashboard('ANUAL')" class="bg-[#BE1E2D] text-white px-6 py-2 rounded-full text-[10px] font-black shadow-lg">ANUAL</button>
-                <button id="btn-tri" onclick="renderDashboard('TRIMESTRAL')" class="bg-gray-800 text-white px-6 py-2 rounded-full text-[10px] font-black opacity-50 hover:opacity-100">TRIMESTRAL</button>
+            <h1 class="text-lg font-black uppercase tracking-tight hidden md:block">CASA NOSTRA <span class="text-[#BE1E2D]">INDICADORES</span> <span class="text-[9px] text-gray-500 ml-2 italic tracking-widest">v2.4</span></h1>
+            
+            <!-- SELETOR DINÂMICO DE ABAS -->
+            <div class="relative ml-4 hidden sm:block">
+                <select id="sheet-selector" onchange="renderDashboard(this.value)" class="bg-gray-900 text-white pl-5 pr-8 py-2.5 rounded-full text-[10px] font-black outline-none cursor-pointer shadow-lg hover:bg-gray-800 transition-all appearance-none uppercase tracking-wider">
+                    <option value="">Carregando Abas...</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
+                    <svg class="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
             </div>
+
         </div>
         <div class="flex gap-3">
             <button id="btn-pdf" onclick="gerarPDF()" class="bg-white text-black px-6 py-2 rounded-full text-[10px] font-black shadow-lg hover:scale-105 transition-all">📥 GERAR PDF</button>
